@@ -11,8 +11,16 @@ void *user_task(void *arg)
 {
     (void) arg;
     TaskTrace taskTrace;
+    struct sched_param param = {60};
     pid_t pid = PID_get();
     printf("UserTask: Task created with pid %d\n", pid);
+
+    // Changing scheduler to SCHED_FIFO (RT)
+    if (sched_setscheduler(0, SCHED_FIFO, &param) == -1) {
+        printf("UserTask %d: Error changing scheduler to SCHED_FIFO: ", pid);
+        perror("");
+        return NULL;
+    }
 
     if (TaskTrace_init(&taskTrace)) {
         printf("UserTask %d: Error initializing taskTrace\n", pid);
@@ -25,10 +33,10 @@ void *user_task(void *arg)
     }
 
     while(1) {
-        sleep(1);
         TaskTrace_traceWorkStart(&taskTrace);
         usleep(pid);
         TaskTrace_traceWorkStop(&taskTrace);
+        sleep(2);
     }
 
     return NULL;

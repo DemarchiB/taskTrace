@@ -147,7 +147,6 @@ void SharedMem_getFinalPath(char *const finalPath, pid_t pid)
 {
     char pidAsString[20];
 
-    // 1º Convert the pid_t to string and generate the final path
     snprintf(pidAsString, sizeof(pidAsString), "%d", pid);
     memcpy(finalPath, defaultPath, sizeof(defaultPath));
     strcat(finalPath, pidAsString);

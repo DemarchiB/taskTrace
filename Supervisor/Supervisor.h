@@ -12,7 +12,7 @@ typedef struct {
     pthread_t id;   // thread id
     pid_t pid;        // user pid that is being monitored by this thread
     SharedMem sharedMem;    // The memory shared between the user process and the monitor process
-    Telegram telegram[MAX_NUMBER_OF_TELEGRAMS_BUFFERED];
+    Telegram telegram[MAX_NUMBER_OF_TELEGRAMS_BUFFERED];    // to be used as rx buffer
 
     uint64_t lastStartWorkTime;
     uint64_t lastStopWorkTime;
