@@ -25,6 +25,7 @@ int TaskTrace_init(TaskTrace *const me)
 
 int TaskTrace_deinit(TaskTrace *const me)
 {
+    (void) me;
     return -1;
 }
 
@@ -64,14 +65,19 @@ int TaskTrace_traceWorkStart(TaskTrace *const me)
         return -1;
     }
 
-    static uint8_t test = 0;
+    me->telegram.pid = me->pid;
+    me->telegram.code = TelegramCode_startWorkPoint;
 
-    test++;
-
-    ssize_t ret = SharedMem_userWrite(&me->SharedMem, &test, sizeof(test));
-
-    if (ret != sizeof(test)) {
+    // Read the actual time
+    if (clock_gettime(CLOCK_MONOTONIC_RAW, &me->telegram.timestamp) != 0) {
+        perror("Error reding actual time to generate timestamp");
         return -1;
+    }
+
+    ssize_t ret = SharedMem_userWrite(&me->SharedMem, &me->telegram);
+
+    if (ret != sizeof(Telegram)) {
+        return -2;
     }
 
     return 0;
@@ -83,14 +89,19 @@ int TaskTrace_traceWorkStop(TaskTrace *const me)
         return -1;
     }
 
-    static uint8_t test = 0;
+    me->telegram.pid = me->pid;
+    me->telegram.code = TelegramCode_stopWorkPoint;
 
-    test++;
-
-    ssize_t ret = SharedMem_userWrite(&me->SharedMem, &test, sizeof(test));
-
-    if (ret != sizeof(test)) {
+    // Read the actual time
+    if (clock_gettime(CLOCK_MONOTONIC_RAW, &me->telegram.timestamp) != 0) {
+        perror("Error reding actual time to generate timestamp");
         return -1;
+    }
+
+    ssize_t ret = SharedMem_userWrite(&me->SharedMem, &me->telegram);
+
+    if (ret != sizeof(Telegram)) {
+        return -2;
     }
 
     return 0;

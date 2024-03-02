@@ -8,6 +8,7 @@ typedef struct {
     int isRecording;
     pid_t pid;
     SharedMem SharedMem;
+    Telegram telegram;  // Used as txBuffer.
 } TaskTrace;
 
 int TaskTrace_init(TaskTrace *const me);

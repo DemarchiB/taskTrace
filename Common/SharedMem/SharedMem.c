@@ -122,14 +122,14 @@ int SharedMem_supervisorDeinit(SharedMem *const me)
     return 0;
 }
 
-ssize_t SharedMem_userWrite(const SharedMem *const me, const uint8_t *const buffer, size_t size)
+ssize_t SharedMem_userWrite(const SharedMem *const me, const Telegram *const telegram)
 {
-    return write(me->fd, buffer, size);
+    return write(me->fd, telegram, sizeof(Telegram));
 }
 
-ssize_t SharedMem_supervisorRead(const SharedMem *const me, uint8_t *const buffer, size_t maxSize)
+ssize_t SharedMem_supervisorRead(const SharedMem *const me, Telegram *const telegram)
 {
-    return read(me->fd, buffer, maxSize);
+    return read(me->fd, telegram, sizeof(Telegram));
 }
 
 const char* SharedMem_getDefaultPath(void)

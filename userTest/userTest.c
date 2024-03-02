@@ -5,7 +5,7 @@
 #include <pthread.h>
 #include <unistd.h> // getpid
 
-#define NUM_THREADS 3
+#define NUM_THREADS 1
 
 void *user_task(void *arg) 
 {

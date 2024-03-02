@@ -178,13 +178,17 @@ static void *Monitor_task(void *arg)
     SharedMem_supervisorInit(&me->sharedMem, me->pid);
 
     while(1) {
-        ssize_t numberOfBytesReceived = SharedMem_supervisorRead(&me->sharedMem, me->rxBuffer, MAX_MONITOR_BUFFER);
+        ssize_t numberOfBytesReceived = SharedMem_supervisorRead(&me->sharedMem, &me->telegram[0]);
 
-        printf("Monitor %d: %ld bytes received: ", me->pid, numberOfBytesReceived);
-
-        for (ssize_t i = 0; i < numberOfBytesReceived; i++) {
-            printf("%d", me->rxBuffer[i]);
+        if (numberOfBytesReceived != sizeof(Telegram)) {
+            printf("Monitor %d: invalid telegram received (%ld, should be %ld)\n", me->pid, numberOfBytesReceived, sizeof(Telegram));
+            continue;
         }
+
+        printf("Monitor %d: Telegram received successfully: \n", me->pid);
+        printf("       pid:      %d\n", me->telegram[0].pid);
+        printf("       code:     %d\n", me->telegram[0].code);
+        printf("       time(us): %ld\n", (me->telegram[0].timestamp.tv_sec * 1000 * 1000) + (me->telegram[0].timestamp.tv_nsec / 1000));
 
         printf("\n");
     }

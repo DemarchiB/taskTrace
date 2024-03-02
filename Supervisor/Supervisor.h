@@ -6,13 +6,13 @@
 #include <pthread.h>
 
 #define MAX_TRACED_TASKS 10
-#define MAX_MONITOR_BUFFER 64*1024
+#define MAX_NUMBER_OF_TELEGRAMS_BUFFERED 10000
 
 typedef struct {
     pthread_t id;   // thread id
     pid_t pid;        // user pid that is being monitored by this thread
     SharedMem sharedMem;    // The memory shared between the user process and the monitor process
-    uint8_t rxBuffer[MAX_MONITOR_BUFFER];
+    Telegram telegram[MAX_NUMBER_OF_TELEGRAMS_BUFFERED];
 } MonitorThread;
 
 typedef struct {
