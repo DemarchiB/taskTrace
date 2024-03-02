@@ -32,6 +32,10 @@ TARGET_USR = TaskTrace/TaskTrace
 
 all: $(TARGET_SUP) $(TARGET_USR)
 
+sup: $(TARGET_SUP)
+
+usr: $(TARGET_USR)
+
 $(TARGET_SUP): $(OBJS_SUP)
 	$(CC) $(CFLAGS) $^ -o $@
 

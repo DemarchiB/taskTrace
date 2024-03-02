@@ -17,26 +17,39 @@ int main()
 {
     Supervisor supervisor;
 
+    printf("Supervisor: Starting configuration\n");
     if (Supervisor_init(&supervisor)) {
         printf("Supervisor: Error initiallizing\n");
         return -1;
     }
 
+    printf("Supervisor: Creating cleanup task\n");
     if (pthread_create(&supervisor.cleanUpTask_id, NULL, Supervisor_checkAndCleanUnusedSharedMemThread, &supervisor) != 0) {
         perror("Supervisor: Error creating cleanup task");
         return -2;
     }
 
     while(1) {
+        printf("Supervisor: Checking for new tasks to trace\n");
         PID pid = Supervisor_checkNewTaskToTrace(&supervisor);
-        int instanceNumber = Supervisor_getFirstFreeInstance(&supervisor);
+        printf("Supervisor: new task to trace found with PID %d\n", (int) pid);
+
+        int instanceNumber;
+        printf("Supervisor: checking for a free monitoring instace\n");
+        while ((instanceNumber = Supervisor_getFirstFreeInstance(&supervisor)) < 0) {
+            usleep(500000); 
+        }
+        printf("Supervisor: Free instance %d found\n", instanceNumber);
+
+        supervisor.isTaskBeingTraced[instanceNumber] = 1;  // Reserve the instance
         supervisor.sharedMem[instanceNumber].pid = pid;
 
+        printf("Supervisor: Creating a thread to monitor the user process %d\n", pid);
         if (pthread_create(&supervisor.supervisorTask_id[instanceNumber], 
                 NULL, 
                 Supervisor_userProcessMonitorTask, 
                 &supervisor.sharedMem[instanceNumber]) != 0) {
-            perror("Supervisor: Error creating process monitor task");
+            perror("Supervisor: Error creating monitoring thread");
             return -3;
         }
     }
@@ -62,11 +75,7 @@ PID Supervisor_checkNewTaskToTrace(Supervisor *const me)
     DIR *dir;
 
     // Open the default shared mem region to search on
-    dir = opendir(SharedMem_getDefaultPath());
-    if (dir == NULL) {
-        perror("Supervisor: Error opening the default shared mem region");
-        return -1;
-    }
+    while((dir = opendir(SharedMem_getDefaultPath())) == NULL);
 
     do {
         struct dirent *entry;
@@ -75,7 +84,10 @@ PID Supervisor_checkNewTaskToTrace(Supervisor *const me)
 
         // Check if there is any new region created by some task that wants to be traced
         while ((entry = readdir(dir)) != NULL) {
-            pid = (PID) atoi(entry->d_name);
+            //printf("Supervisor_checkNewTaskToTrace: entry->d_name |%s|, PID = %d\n", entry->d_name, atoi(entry->d_name));
+            if ((pid = (PID) atoi(entry->d_name)) <= 0) {
+                continue;
+            }
             int taskAlreadyBeingTraced = 0;
 
             for (size_t i = 0; i < MAX_TRACED_TASKS; i++) {
@@ -89,6 +101,7 @@ PID Supervisor_checkNewTaskToTrace(Supervisor *const me)
                 newTaskToTraceFound = 1;
                 break;
             }
+            sleep(1);
         }
     } while (newTaskToTraceFound == 0);
 
@@ -104,11 +117,7 @@ static void *Supervisor_checkAndCleanUnusedSharedMemThread(void *arg)
     DIR *dir;
 
     // Open the default shared mem region to search on
-    dir = opendir(SharedMem_getDefaultPath());
-    if (dir == NULL) {
-        perror("Supervisor: Error opening the default shared mem region");
-        pthread_exit(NULL);
-    }
+    while((dir = opendir(SharedMem_getDefaultPath())) == NULL);
 
     while (1) {
         struct dirent *entry;
