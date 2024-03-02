@@ -1,14 +1,9 @@
 #ifndef __TASK_TRACE_PROCESS_H__
 #define __TASK_TRACE_PROCESS_H__
 
-// typedef struct {
-//     int number; // The process ID number
-// } PID;
+#include <sys/types.h>
 
-typedef int PID;
-
-PID PID_get(void);
-int PID_checkIfExist(PID pid);
-
+pid_t PID_get(void);
+int PID_checkIfExist(pid_t pid);
 
 #endif // __TASK_TRACE_PROCESS_H__

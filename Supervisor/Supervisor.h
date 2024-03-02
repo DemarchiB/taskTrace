@@ -10,7 +10,7 @@
 
 typedef struct {
     pthread_t id;   // thread id
-    PID pid;        // user pid that is being monitored by this thread
+    pid_t pid;        // user pid that is being monitored by this thread
     SharedMem sharedMem;    // The memory shared between the user process and the monitor process
     uint8_t rxBuffer[MAX_MONITOR_BUFFER];
 } MonitorThread;
@@ -24,6 +24,6 @@ typedef struct {
 } Supervisor;
 
 int Supervisor_init(Supervisor *const me);
-PID Supervisor_checkNewTaskToTrace(Supervisor *const me);
+pid_t Supervisor_checkNewTaskToTrace(Supervisor *const me);
 
 #endif // __TASK_TRACE_SUPERVISOR_H__

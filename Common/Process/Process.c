@@ -1,17 +1,18 @@
 #include "Process.h"
 
-//#define _POSIX_SOURCE
 #include <unistd.h> // getpid, getuid
 #include <signal.h> // kill
+
+#include <sys/syscall.h>    // syscall
 
 /**
  * @brief Return the curent process' PID
  * 
  * @return PID 
  */
-PID PID_get(void)
+pid_t PID_get(void)
 {
-    return (PID) getpid();
+    return syscall(SYS_gettid);
 }
 
 /**
@@ -22,7 +23,7 @@ PID PID_get(void)
  *              1 Exist
  *              -1 Permission error. This function must be called by a super user
  */
-int PID_checkIfExist(PID pid)
+int PID_checkIfExist(pid_t pid)
 {
     if (geteuid() != 0) {
         // printf("I'm not with root permissions.\n");
@@ -34,11 +35,11 @@ int PID_checkIfExist(PID pid)
     //      checks are still performed; this can be used to check for the
     //      existence of a process ID or process group ID that the caller is
     //      permitted to signal.
-    if (kill((int) pid, 0) == 0) {
-        // printf("The process with the PID %d exist.\n", pid);
+    if (kill(pid, 0) == 0) {
+        // printf("The process with the pid_t %d exist.\n", pid);
         return 1;
     } else {
-        // printf("The process with the PID %d doesn't exist or you don't have permissions to access it.\n", pid);
+        // printf("The process with the pid_t %d doesn't exist or you don't have permissions to access it.\n", pid);
         return 0;
     }
 }

@@ -5,7 +5,7 @@
 #include <string.h>
 #include <dirent.h>     // opendir, readdir, closedir
 #include <stdlib.h>     // atoi
-#include <sys/mman.h>
+#include <sys/mman.h>   // mlockall
 #include <unistd.h>     // usleep, getuid
 
 static void *Supervisor_checkAndCleanUnusedSharedMemThread(void *arg);
@@ -13,7 +13,7 @@ static void *Monitor_task(void *arg);
 
 static int Supervisor_reserveInstance(Supervisor *const me);
 static int Supervisor_freeInstance(Supervisor *const me, int instanceNumber);
-static int Supervisor_checkIfTaskIsBeingTraced(Supervisor *const me, PID pid);
+static int Supervisor_checkIfTaskIsBeingTraced(Supervisor *const me, pid_t pid);
 
 int main() 
 {
@@ -40,8 +40,8 @@ int main()
 
     while(1) {
         printf("Supervisor: Checking for new tasks to trace\n");
-        PID pid = Supervisor_checkNewTaskToTrace(&supervisor);
-        printf("Supervisor: new task to trace found with PID %d\n", (int) pid);
+        pid_t pid = Supervisor_checkNewTaskToTrace(&supervisor);
+        printf("Supervisor: new task to trace found with pid_t %d\n", (int) pid);
 
         int instanceNumber;
         printf("Supervisor: checking for a free monitoring instace\n");
@@ -79,10 +79,10 @@ int Supervisor_init(Supervisor *const me)
     return 0;
 }
 
-PID Supervisor_checkNewTaskToTrace(Supervisor *const me)
+pid_t Supervisor_checkNewTaskToTrace(Supervisor *const me)
 {
     int newTaskToTraceFound = 0;
-    PID pid;
+    pid_t pid;
 
     DIR *dir;
 
@@ -96,8 +96,8 @@ PID Supervisor_checkNewTaskToTrace(Supervisor *const me)
 
         // Check if there is any new region created by some task that wants to be traced
         while ((entry = readdir(dir)) != NULL) {
-            //printf("Supervisor_checkNewTaskToTrace: entry->d_name |%s|, PID = %d\n", entry->d_name, atoi(entry->d_name));
-            if ((pid = (PID) atoi(entry->d_name)) <= 0) {
+            //printf("Supervisor_checkNewTaskToTrace: entry->d_name |%s|, pid_t = %d\n", entry->d_name, atoi(entry->d_name));
+            if ((pid = (pid_t) atoi(entry->d_name)) <= 0) {
                 continue;
             }
 
@@ -130,7 +130,7 @@ static void *Supervisor_checkAndCleanUnusedSharedMemThread(void *arg)
 
         // Check if there is a region created that does not correspont to any process
         while ((entry = readdir(dir)) != NULL) {
-            PID pid = (PID) atoi(entry->d_name);
+            pid_t pid = (pid_t) atoi(entry->d_name);
             // printf("Cleanup: entry->d_name = %s, pid = %d\n", entry->d_name, pid);
             
             if (pid <= 0) {
@@ -241,7 +241,7 @@ static int Supervisor_freeInstance(Supervisor *const me, int instanceNumber)
  * @param pid the pid that you want to check if is already being traced
  * @return int 
  */
-static int Supervisor_checkIfTaskIsBeingTraced(Supervisor *const me, PID pid)
+static int Supervisor_checkIfTaskIsBeingTraced(Supervisor *const me, pid_t pid)
 {
     int isTaskBeingTraced = 0;
     pthread_mutex_lock(&me->isTaskBeingTraced_mutex);
