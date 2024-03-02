@@ -46,14 +46,15 @@ int SharedMem_userInit(SharedMem *const me, pid_t pid)
     // 2.3 Create the named pipe with r/w permission for all kind of users
     // if (mkfifo(sharedMem_Path, 0666) != 0) {
     if (mkfifoat(0, sharedMem_Path, 0666) != 0) {
-        perror("TaskTrace: Error to create the shared mem region");
+        perror("SharedMem_userInit: Error to create the shared mem region");
         return -2;
     }
 
     // 2.4 Open the fifo as write only, since we will only send data through
     // CAREFULL: THIS CALL WILL BLOCK UNTIL THE SUPERVISOR OPENS IT AS READ ONLY.
-    if ((me->fd = open(sharedMem_Path, O_WRONLY | O_NONBLOCK)) == -1) {
-        perror("TaskTrace: Error opening the shared mem region");
+    if ((me->fd = open(sharedMem_Path, O_RDWR | O_NONBLOCK)) == -1) {
+        perror("SharedMem_userInit: Error opening the shared mem region");
+        printf("Tried to open %s\n", sharedMem_Path);
         return -3;
     }
 
@@ -85,7 +86,8 @@ int SharedMem_supervisorInit(SharedMem *const me, pid_t pid)
     // 3º Open the fifo as read only, since we will only read the data sent by the user task
     // CAREFULL: THIS CALL WILL BLOCK UNTIL THE SUPERVISOR OPENS IT AS WRITE ONLY.
     if ((me->fd = open(sharedMem_Path, O_RDONLY)) == -1) {
-        perror("Supervisor: Error opening the shared mem region");
+        perror("SharedMem_supervisorInit: Error opening the shared mem region");
+        printf("Tried to open %s\n", sharedMem_Path);
         return -1;
     }
 
