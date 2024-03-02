@@ -8,8 +8,11 @@
 #include <sys/mman.h>   // mlockall
 #include <unistd.h>     // usleep, getuid
 
+#include <ncurses.h>    //  Interface
+
 static void *Supervisor_checkAndCleanUnusedSharedMemThread(void *arg);
 static void *Monitor_task(void *arg);
+static void *Supervisor_interfaceUpdateTask(void *arg);
 
 static int Supervisor_reserveInstance(Supervisor *const me);
 static int Supervisor_freeInstance(Supervisor *const me, int instanceNumber);
@@ -38,27 +41,33 @@ int main()
 
     sleep(1);   // Wait for the cleanup task to make the first clean.
 
+    printf("Supervisor: Creating interface update task\n");
+    if (pthread_create(&supervisor.interfaceUpdateTask_id, NULL, Supervisor_interfaceUpdateTask, &supervisor) != 0) {
+        perror("Supervisor: Error creating interface update task");
+        return -4;
+    }
+
     while(1) {
-        printf("Supervisor: Checking for new tasks to trace\n");
+        //printf("Supervisor: Checking for new tasks to trace\n");
         pid_t pid = Supervisor_checkNewTaskToTrace(&supervisor);
-        printf("Supervisor: new task to trace found with pid_t %d\n", (int) pid);
+        //printf("Supervisor: new task to trace found with pid_t %d\n", (int) pid);
 
         int instanceNumber;
-        printf("Supervisor: checking for a free monitoring instace\n");
+        //printf("Supervisor: checking for a free monitoring instace\n");
         while ((instanceNumber = Supervisor_reserveInstance(&supervisor)) < 0) {
-            usleep(500000); 
+            usleep(500000);
         }
-        printf("Supervisor: Free instance %d found\n", instanceNumber);
+       // printf("Supervisor: Free instance %d found\n", instanceNumber);
 
         supervisor.monitor[instanceNumber].pid = pid;
 
-        printf("Supervisor: Creating a thread to monitor the user process %d\n", pid);
+        //printf("Supervisor: Creating a thread to monitor the user process %d\n", pid);
         if (pthread_create(&supervisor.monitor[instanceNumber].id, 
                 NULL, 
                 Monitor_task, 
                 &supervisor.monitor[instanceNumber]) != 0) {
             perror("Supervisor: Error creating monitoring thread");
-            return -4;
+            return -5;
         }
     }
 
@@ -74,6 +83,12 @@ int Supervisor_init(Supervisor *const me)
 
     if (pthread_mutex_init(&me->isTaskBeingTraced_mutex, NULL) != 0) {
         return -1;
+    }
+
+    // Adjust max and minumum values
+    for (ssize_t i = 0; i < MAX_TRACED_TASKS; i++) {
+        me->monitor[i].metrics.minWorkTime = (uint64_t) -1;
+        me->monitor[i].metrics.maxWorkTime = 0;
     }
 
     return 0;
@@ -178,25 +193,51 @@ static void *Monitor_task(void *arg)
     SharedMem_supervisorInit(&me->sharedMem, me->pid);
 
     while(1) {
-        ssize_t numberOfBytesReceived = SharedMem_supervisorRead(&me->sharedMem, &me->telegram[0]);
+        ssize_t numberOfBytesReceived = SharedMem_supervisorRead(&me->sharedMem, &me->telegram);
 
         if (numberOfBytesReceived != sizeof(Telegram)) {
-            printf("Monitor %d: invalid telegram received (%ld, should be %ld)\n", me->pid, numberOfBytesReceived, sizeof(Telegram));
+            printf("Monitor %d: invalid telegram, received %ld bytes (should be %ld)\n", me->pid, numberOfBytesReceived, sizeof(Telegram));
             continue;
         }
 
-        switch (me->telegram->code)
+        if (me->pid != me->telegram.pid) {
+            printf("Monitor %d: invalid telegram, pid %d received (should be %d)\n", me->pid, me->telegram.pid, me->pid);
+            continue;
+        }
+
+        switch (me->telegram.code)
         {
         case TelegramCode_startWorkPoint:
-            me->lastStartWorkTime = (me->telegram[0].timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram[0].timestamp.tv_nsec);
+            me->metrics.lastStartWorkTime = (me->telegram.timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram.timestamp.tv_nsec);
             break;
         case TelegramCode_stopWorkPoint:
-            me->lastStopWorkTime = (me->telegram[0].timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram[0].timestamp.tv_nsec);
-            me->lastWorkTime = me->lastStopWorkTime - me->lastStartWorkTime;
-            printf("Monitor %d: total work time = %ld ns\n", me->pid, me->lastWorkTime);
+            me->metrics.lastStopWorkTime = (me->telegram.timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram.timestamp.tv_nsec);
+
+            // Calculate the work time
+            me->metrics.lastWorkTime = me->metrics.lastStopWorkTime - me->metrics.lastStartWorkTime;
+
+            // Calculate the maximum and minimum values
+            if (me->metrics.lastWorkTime > me->metrics.maxWorkTime) {
+                me->metrics.maxWorkTime = me->metrics.lastWorkTime;
+            } else if (me->metrics.lastWorkTime < me->metrics.minWorkTime) {
+                me->metrics.minWorkTime = me->metrics.lastWorkTime;
+            }
+
+            printf("Monitor %d: total work time = %ld ns\n", me->pid, me->metrics.lastWorkTime);
+            break;
+        case TelegramCode_perfMark1Start:
+            me->metrics.perfMarkStart[TelegramCode_perfMark1Start - TELEGRAM_PERFMARK_OFFSET] = 
+                (me->telegram.timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram.timestamp.tv_nsec);
+            break;
+        case TelegramCode_perfMark1End:
+            me->metrics.perfMarkStop[TelegramCode_perfMark1End - TELEGRAM_PERFMARK_OFFSET] = 
+                (me->telegram.timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram.timestamp.tv_nsec);
+            me->metrics.perfMartTotalTime[TelegramCode_perfMark1End - TELEGRAM_PERFMARK_OFFSET - 1] = 
+                me->metrics.perfMarkStop[TelegramCode_perfMark1End - TELEGRAM_PERFMARK_OFFSET - 1] - me->metrics.perfMarkStart[0];
+            printf("Monitor %d: performance mark %d work time = %ld ns\n", me->pid, TelegramCode_perfMark1Start - TELEGRAM_PERFMARK_OFFSET + 1, me->metrics.lastWorkTime);
             break;
         default:
-            printf("Monitor %d: invalid code (%d) received\n", me->pid, me->telegram->code);
+            printf("Monitor %d: Error, invalid code (%d) received\n", me->pid, me->telegram.code);
             break;
         }
 
@@ -204,6 +245,20 @@ static void *Monitor_task(void *arg)
         // printf("       pid:      %d\n", me->telegram[0].pid);
         // printf("       code:     %d\n", me->telegram[0].code);
         // printf("       time(ns): %ld\n", me->lastStartWorkTime);
+    }
+
+    pthread_exit(NULL);
+}
+
+
+static void *Supervisor_interfaceUpdateTask(void *arg)
+{
+    Supervisor *const me = arg;
+
+    printf("Supervisor: Interface updater task created\n");
+
+    while (1) {
+
     }
 
     pthread_exit(NULL);

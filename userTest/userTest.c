@@ -32,9 +32,23 @@ void *user_task(void *arg)
         return NULL;
     }
 
+
+
     while(1) {
+        struct timespec t_ini, t_cur;
         TaskTrace_traceWorkStart(&taskTrace);
-        usleep(pid);
+        
+        // Read the actual time
+        clock_gettime(CLOCK_MONOTONIC_RAW, &t_ini);
+        t_cur.tv_nsec = t_ini.tv_nsec;
+        t_cur.tv_sec = t_cur.tv_sec;
+
+        // simulate some load
+        while ((((t_cur.tv_sec * 1000 * 1000 * 1000) + t_cur.tv_nsec) - ((t_ini.tv_sec * 1000 * 1000 * 1000) + t_ini.tv_nsec)) < pid * 1000) {
+            clock_gettime(CLOCK_MONOTONIC_RAW, &t_cur);
+        }
+
+        //usleep(pid);
         TaskTrace_traceWorkStop(&taskTrace);
         sleep(2);
     }

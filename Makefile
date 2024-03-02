@@ -37,7 +37,7 @@ sup: $(TARGET_SUP)
 usr: $(TARGET_USR)
 
 $(TARGET_SUP): $(OBJS_SUP)
-	$(CC) $(CFLAGS) $^ -o $@
+	$(CC) $(CFLAGS) -lncurses $^ -o $@
 
 $(TARGET_USR): $(OBJS_USR)
 	$(CC) $(CFLAGS) $^ -o $@

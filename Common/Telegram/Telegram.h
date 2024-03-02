@@ -6,13 +6,13 @@
 
 #include <time.h>
 
+#define TELEGRAM_PERFMARK_OFFSET 100 // The offset from wich the performance markers will start
+
 typedef enum {
     TelegramCode_startWorkPoint,
     TelegramCode_stopWorkPoint,
-    // These are not implemented yet, they will be available on future
-    //TelegramCode_startPerfMark,
-    //TelegramCode_middlePerfMark,
-    //TelegramCode_endPerfMark,
+    TelegramCode_perfMark1Start = TELEGRAM_PERFMARK_OFFSET,
+    TelegramCode_perfMark1End,
     NumberOfTelegramCodes,
 } TelegramCode;
 
