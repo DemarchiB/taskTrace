@@ -29,7 +29,6 @@ int PID_checkIfExist(PID pid)
         return -1;
     }
 
-
     // Trying to send a 0 signal. Accordingly to kill() manual:
     //      If sig is 0, then no signal is sent, but existence and permission
     //      checks are still performed; this can be used to check for the

@@ -1,4 +1,4 @@
 #!/bin/bash
 
-./Supervisor/Supervisor
+sudo ./Supervisor/Supervisor
 #./TaskTrace/TaskTrace & 

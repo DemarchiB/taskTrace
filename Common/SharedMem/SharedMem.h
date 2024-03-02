@@ -21,6 +21,7 @@ int SharedMem_supervisorDeinit(SharedMem *const me);
 ssize_t SharedMem_supervisorRead(const SharedMem *const me, uint8_t *const buffer, size_t maxSize);
 
 const char* SharedMem_getDefaultPath(void);
+void SharedMem_getFinalPath(char *const finalPath, PID pid);
 
 
 #endif // __TASK_TRACE_SHARED_MEM_H__

@@ -14,8 +14,6 @@
 static const char middlePath[] = "/tmp/udesc";  // should not be needed, but I was lasy to do some logic to avoid it
 static const char defaultPath[] = "/tmp/udesc/taskMonitor/";
 
-static void SharedMem_getFinalPath(char *const finalPath, PID pid);
-
 /**
  * @brief Must be called to create the shared memory region from the user app.
  * 
@@ -145,7 +143,7 @@ const char* SharedMem_getDefaultPath(void)
  * @param finalPath 
  * @param pid 
  */
-static void SharedMem_getFinalPath(char *const finalPath, PID pid)
+void SharedMem_getFinalPath(char *const finalPath, PID pid)
 {
     char pidAsString[20];
 
