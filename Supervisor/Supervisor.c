@@ -185,12 +185,25 @@ static void *Monitor_task(void *arg)
             continue;
         }
 
-        printf("Monitor %d: Telegram received successfully: \n", me->pid);
-        printf("       pid:      %d\n", me->telegram[0].pid);
-        printf("       code:     %d\n", me->telegram[0].code);
-        printf("       time(us): %ld\n", (me->telegram[0].timestamp.tv_sec * 1000 * 1000) + (me->telegram[0].timestamp.tv_nsec / 1000));
+        switch (me->telegram->code)
+        {
+        case TelegramCode_startWorkPoint:
+            me->lastStartWorkTime = (me->telegram[0].timestamp.tv_sec * 1000 * 1000) + (me->telegram[0].timestamp.tv_nsec / 1000);
+            break;
+        case TelegramCode_stopWorkPoint:
+            me->lastStopWorkTime = (me->telegram[0].timestamp.tv_sec * 1000 * 1000) + (me->telegram[0].timestamp.tv_nsec / 1000);
+            me->lastWorkTime = me->lastStopWorkTime - me->lastStartWorkTime;
+            printf("Monitor %d: total work time = %ld us\n", me->pid, me->lastWorkTime);
+            break;
+        default:
+            printf("Monitor %d: invalid code (%d) received\n", me->pid, me->telegram->code);
+            break;
+        }
 
-        printf("\n");
+        // printf("Monitor %d: Telegram received successfully: \n", me->pid);
+        // printf("       pid:      %d\n", me->telegram[0].pid);
+        // printf("       code:     %d\n", me->telegram[0].code);
+        // printf("       time(us): %ld\n", me->lastStartWorkTime);
     }
 
     pthread_exit(NULL);
