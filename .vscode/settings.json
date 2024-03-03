@@ -4,6 +4,7 @@
         "thread-shared-types.h": "c",
         "telegram.h": "c",
         "pthread.h": "c",
-        "sharedmem.h": "c"
+        "sharedmem.h": "c",
+        "limits": "c"
     }
 }

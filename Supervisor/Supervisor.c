@@ -39,13 +39,13 @@ int main()
         return -3;
     }
 
-    sleep(1);   // Wait for the cleanup task to make the first clean.
-
     printf("Supervisor: Creating interface update task\n");
     if (pthread_create(&supervisor.interfaceUpdateTask_id, NULL, Supervisor_interfaceUpdateTask, &supervisor) != 0) {
         perror("Supervisor: Error creating interface update task");
         return -4;
     }
+
+    sleep(1);   // Wait for the cleanup task to make the first clean.
 
     while(1) {
         //printf("Supervisor: Checking for new tasks to trace\n");
@@ -223,7 +223,7 @@ static void *Monitor_task(void *arg)
                 me->metrics.minWorkTime = me->metrics.lastWorkTime;
             }
 
-            printf("Monitor %d: total work time = %ld ns\n", me->pid, me->metrics.lastWorkTime);
+            // printf("Monitor %d: total work time = %ld ns\n", me->pid, me->metrics.lastWorkTime);
             break;
         case TelegramCode_perfMark1Start:
             me->metrics.perfMarkStart[TelegramCode_perfMark1Start - TELEGRAM_PERFMARK_OFFSET] = 
@@ -234,10 +234,10 @@ static void *Monitor_task(void *arg)
                 (me->telegram.timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram.timestamp.tv_nsec);
             me->metrics.perfMartTotalTime[TelegramCode_perfMark1End - TELEGRAM_PERFMARK_OFFSET - 1] = 
                 me->metrics.perfMarkStop[TelegramCode_perfMark1End - TELEGRAM_PERFMARK_OFFSET - 1] - me->metrics.perfMarkStart[0];
-            printf("Monitor %d: performance mark %d work time = %ld ns\n", me->pid, TelegramCode_perfMark1Start - TELEGRAM_PERFMARK_OFFSET + 1, me->metrics.lastWorkTime);
+            // printf("Monitor %d: performance mark %d work time = %ld ns\n", me->pid, TelegramCode_perfMark1Start - TELEGRAM_PERFMARK_OFFSET + 1, me->metrics.lastWorkTime);
             break;
         default:
-            printf("Monitor %d: Error, invalid code (%d) received\n", me->pid, me->telegram.code);
+            // printf("Monitor %d: Error, invalid code (%d) received\n", me->pid, me->telegram.code);
             break;
         }
 
@@ -250,15 +250,54 @@ static void *Monitor_task(void *arg)
     pthread_exit(NULL);
 }
 
-
 static void *Supervisor_interfaceUpdateTask(void *arg)
 {
     Supervisor *const me = arg;
 
     printf("Supervisor: Interface updater task created\n");
 
-    while (1) {
+    sleep(3);
 
+    // // Inicializar o modo ncurses
+    initscr();
+    cbreak(); // Desabilitar buffering de linha
+    noecho(); // Não exibir caracteres digitados
+    curs_set(0); // Ocultar cursor
+
+    // Duplicar a janela padrão para uma nova janela modificável
+    WINDOW *my_win = dupwin(stdscr);
+    if (my_win == NULL) {
+        endwin();
+        fprintf(stderr, "Erro ao duplicar a janela padrão\n");
+        pthread_exit(NULL);
+    }
+
+    while (1) {
+        clear(); // Limpar a tela
+
+        // Imprimir cabeçalho
+        mvprintw(0, 0, "PID    SCHEDTYPE    PRI    WORKTIME(us)     MAXTIME(us)    MINTIME(us)");
+
+        pthread_mutex_lock(&me->isTaskBeingTraced_mutex);
+        for (ssize_t i = 0; i < MAX_TRACED_TASKS; i++) {
+            if (me->isTaskBeingTraced[i]) {
+                // Printa dados das tarefas
+                mvprintw(i + 1, 0, "%-6d %-12s %-6d %-16ld %-14ld %-14ld",
+                    me->monitor[i].pid,
+                    "SCHED_FIFO", // TODO
+                    0,  // TODO
+                    me->monitor[i].metrics.lastWorkTime / 1000,
+                    me->monitor[i].metrics.maxWorkTime / 1000,
+                    me->monitor[i].metrics.minWorkTime / 1000
+                    );
+            }
+        }
+        pthread_mutex_unlock(&me->isTaskBeingTraced_mutex);
+
+        refresh(); // Atualizar a tela
+
+        // Aguardar um segundo
+        sleep(1);
     }
 
     pthread_exit(NULL);

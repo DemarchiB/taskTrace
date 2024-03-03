@@ -10,8 +10,8 @@ fi
 echo "Test script: Executando processo do supervisor"
 ./Supervisor/Supervisor &
 
-echo "Test script: Esperando 2s"
-sleep 2
+echo "Test script: Esperando 1s"
+sleep 1
 
 echo "Test script: Executando processo de simulação de tarefas do usuário"
 ./userTest/userTest &
