@@ -78,6 +78,8 @@ int main() {
         taskNumber[i] = i;
     }
 
+    printf("UserTest: Creating threads\n");
+
     // Criação das tasks
     for (int i = 0; i < NUM_THREADS; i++) {
         if (pthread_create(&tasks[i], NULL, user_task, &taskNumber[i]) != 0) {
@@ -86,6 +88,7 @@ int main() {
         }
     }
 
+    printf("UserTest: Waiting threads to finish\n");
     // Espera pelas tasks terminarem
     for (int i = 0; i < NUM_THREADS; i++) {
         if (pthread_join(tasks[i], NULL) != 0) {
