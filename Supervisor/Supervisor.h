@@ -31,6 +31,22 @@ typedef struct {
 } MonitorThread;
 
 typedef struct {
+    int isEnabled;  // To enable/disable the autotuning of deadline tasks
+    int policy;     
+} Autotune;
+
+/**
+ * @brief Struct with all possible user inputs
+ * 
+ */
+typedef struct {
+    uint64_t systemLatency;
+    Autotune autotune;
+} UserInputs;
+
+typedef struct {
+    uint64_t systemLatency;     // The system latency in us, must be passed by the user. USer should use some tools to find it (RTLA, for example)
+    UserInputs userInputs;
     int isTaskBeingTraced[MAX_TRACED_TASKS];    // Used to know which instances are being used to trace a user task
     pthread_mutex_t isTaskBeingTraced_mutex;    // Used to protect the list of task being traced
 
@@ -39,7 +55,7 @@ typedef struct {
     MonitorThread monitor[MAX_TRACED_TASKS];
 } Supervisor;
 
-int Supervisor_init(Supervisor *const me);
+int Supervisor_init(Supervisor *const me, const UserInputs *const userInputs);
 pid_t Supervisor_checkNewTaskToTrace(Supervisor *const me);
 
 #endif // __TASK_TRACE_SUPERVISOR_H__

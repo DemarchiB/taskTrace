@@ -17,18 +17,24 @@ static void *Supervisor_interfaceUpdateTask(void *arg);
 static int Supervisor_reserveInstance(Supervisor *const me);
 static int Supervisor_freeInstance(Supervisor *const me, int instanceNumber);
 static int Supervisor_checkIfTaskIsBeingTraced(Supervisor *const me, pid_t pid);
+static int UserInputs_read(UserInputs *const me, int argc, char *argv[]);
 
-int main() 
+int main(int argc, char *argv[]) 
 {
     Supervisor supervisor;
+    UserInputs userInputs;
 
     if (geteuid() != 0) {
         printf("Supervisor: Error, permission denied. Run as sudo.\n");
         return -1;
     }
 
+    if (UserInputs_read(&userInputs, argc, argv)) {
+        return -1;
+    }
+
     printf("Supervisor: Starting configuration\n");
-    if (Supervisor_init(&supervisor)) {
+    if (Supervisor_init(&supervisor, &userInputs)) {
         printf("Supervisor: Error initiallizing\n");
         return -2;
     }
@@ -74,7 +80,7 @@ int main()
     return 0;
 }
 
-int Supervisor_init(Supervisor *const me)
+int Supervisor_init(Supervisor *const me, const UserInputs *const userInputs)
 {
     // config stack em heap to stay always allocated and avoid page faults during operation
     mlockall(MCL_CURRENT | MCL_FUTURE);
@@ -90,6 +96,8 @@ int Supervisor_init(Supervisor *const me)
         me->monitor[i].metrics.minWorkTime = (uint64_t) -1;
         me->monitor[i].metrics.maxWorkTime = 0;
     }
+
+    memcpy(&me->userInputs, userInputs, sizeof(UserInputs));
 
     return 0;
 }
@@ -267,12 +275,12 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
     curs_set(0); // Ocultar cursor
 
     // Duplicar a janela padrão para uma nova janela modificável
-    WINDOW *my_win = dupwin(stdscr);
-    if (my_win == NULL) {
-        endwin();
-        fprintf(stderr, "Erro ao duplicar a janela padrão\n");
-        pthread_exit(NULL);
-    }
+    // WINDOW *my_win = dupwin(stdscr);
+    // if (my_win == NULL) {
+    //     endwin();
+    //     fprintf(stderr, "Erro ao duplicar a janela padrão\n");
+    //     pthread_exit(NULL);
+    // }
 
     char schedulerPolicy[20];
     int currentLine;
@@ -282,9 +290,17 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
         clear(); // Limpar a tela
 
         currentLine = 0;
+        mvprintw(currentLine++, 0, "%-20s %-1s %-1ld %-10s %-1s %-1d",
+            "User inputs->",
+            "sys_latency:",
+            me->userInputs.systemLatency,
+            "us",
+            "autotune:",
+            me->userInputs.autotune.isEnabled
+            );
 
         // 1º Mostra tarefas do tipo deadline
-        mvprintw(currentLine++, 0, "SCHED_DEADLINE TASKS: (all are PRI = RT)");
+        mvprintw(currentLine++, 0, "SCHED_DEADLINE TASKS:");
         mvprintw(currentLine++, 0, "PID      PRI    WORKTIME(ms)    MINTIME(ms)     MAXTIME(ms)    RUNTIME(ms)    DEADLINE(ms)    PERIOD(ms)    RUN_USAGE%%    PROC_USAGE%%");
 
         pthread_mutex_lock(&me->isTaskBeingTraced_mutex);
@@ -450,4 +466,71 @@ static int Supervisor_checkIfTaskIsBeingTraced(Supervisor *const me, pid_t pid)
     pthread_mutex_unlock(&me->isTaskBeingTraced_mutex);
 
     return isTaskBeingTraced;
+}
+
+static int UserInputs_read(UserInputs *const me, int argc, char *argv[])
+{
+    memset(me, 0, sizeof(UserInputs));
+
+    int sys_latency_received = 0;
+
+    if (argc < 2) {
+        printf("Supervisor: Error, user must pass at least the sys_latency value.\n");
+        printf("Usage: sudo Supervisor --sys_latency 500\n");
+        printf("   or: sudo Supervisor --sys_latency 500 --autotune on\n");
+        printf("Obs: The latency must be in microseconds (us)\n");
+        return -1;
+    }
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--sys_latency") == 0) {
+            // Check if there is a value after "--sys_latency"
+            if (i + 1 < argc) {
+                // Convert the value to systemLatency
+                me->systemLatency = atoi(argv[i + 1]);
+                i++; // jump to the next argument.
+                sys_latency_received = 1;
+            } else {
+                printf("Supervisor: missing value for \"--sys_latency\"\n");
+                return -1;
+            }
+        }
+        else if (strcmp(argv[i], "--autotune") == 0) {
+            // Check if there is a value after "--autotune"
+            if (i + 1 < argc) {
+                if (strcmp(argv[i + 1], "on") == 0) {
+                    me->autotune.isEnabled = 1;
+                } else if (strcmp(argv[i + 1], "off") == 0) {
+                    me->autotune.isEnabled = 0;
+                } else {
+                    printf("Supervisor: Invalid value for \"--autotune\"\n");
+                    printf("Supervisor: Valid values \"on\" and \"off\"\n");
+                    return -2;
+                }
+                i++; // jump to the next argument.
+            } else {
+                printf("Supervisor: missing value for \"--autotune\"\n");
+                return -2;
+            }
+        }
+        else if ((strcmp(argv[i], "-h") == 0) || (strcmp(argv[i], "--help") == 0)) {
+            printf("Usage: sudo Supervisor --sys_latency 500\n");
+            printf("   or: sudo Supervisor --sys_latency 500 --autotune on\n");
+            printf("   or: sudo Supervisor --sys_latency 500 --autotune off\n");
+            printf("The system maximum latency (in us) is a mandatory argument\n");
+            printf("You should get this value using other tools, like RTLA.\n");
+            return -3; // Return error just to avoid the supervisor to move on
+        }
+    }
+
+    if (sys_latency_received == 0) {
+        printf("Supervisor: Error, user must pass at least the sys_latency value.\n");
+        printf("Usage: sudo Supervisor --sys_latency 500\n");
+        printf("   or: sudo Supervisor --sys_latency 500 --autotune on\n");
+        printf("Obs: The latency must be in microseconds (us)\n");
+        return -1;
+    }
+
+
+    return 0;
 }

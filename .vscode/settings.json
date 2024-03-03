@@ -6,6 +6,7 @@
         "pthread.h": "c",
         "sharedmem.h": "c",
         "limits": "c",
-        "process.h": "c"
+        "process.h": "c",
+        "supervisor.h": "c"
     }
 }

@@ -8,7 +8,7 @@ if [ "$(id -u)" != "0" ]; then
 fi
 
 echo "Test script: Executando processo do supervisor"
-./Supervisor/Supervisor &
+./Supervisor/Supervisor --sys_latency 500 &
 
 echo "Test script: Esperando 1s"
 sleep 1

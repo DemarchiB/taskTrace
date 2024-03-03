@@ -8,4 +8,4 @@ if [ "$(id -u)" != "0" ]; then
 fi
 
 echo "Run supervisor: Executando processo do supervisor"
-./Supervisor/Supervisor
+./Supervisor/Supervisor --sys_latency 500
