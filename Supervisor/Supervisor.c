@@ -274,6 +274,8 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
         pthread_exit(NULL);
     }
 
+    char schedulerPolicy[20];
+
     while (1) {
         clear(); // Limpar a tela
 
@@ -283,11 +285,15 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
         pthread_mutex_lock(&me->isTaskBeingTraced_mutex);
         for (ssize_t i = 0; i < MAX_TRACED_TASKS; i++) {
             if (me->isTaskBeingTraced[i]) {
+                if (PID_getSchedulerPolicy(me->monitor[i].pid, schedulerPolicy) < 0) {
+                    snprintf(schedulerPolicy, sizeof(schedulerPolicy), "UNKNOWN");
+                }
+
                 // Printa dados das tarefas
                 mvprintw(i + 1, 0, "%-6d %-12s %-6d %-16ld %-14ld %-14ld %-6.1f",
                     me->monitor[i].pid,
-                    "SCHED_FIFO", // TODO
-                    0,  // TODO
+                    schedulerPolicy,
+                    PID_getPriority(me->monitor[i].pid),
                     me->monitor[i].metrics.lastWorkTime / 1000,
                     me->monitor[i].metrics.maxWorkTime / 1000,
                     me->monitor[i].metrics.minWorkTime / 1000,
