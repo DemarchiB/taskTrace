@@ -55,7 +55,4 @@ typedef struct {
     MonitorThread monitor[MAX_TRACED_TASKS];
 } Supervisor;
 
-int Supervisor_init(Supervisor *const me, const UserInputs *const userInputs);
-pid_t Supervisor_checkNewTaskToTrace(Supervisor *const me);
-
 #endif // __TASK_TRACE_SUPERVISOR_H__

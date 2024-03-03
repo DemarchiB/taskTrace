@@ -10,18 +10,22 @@
 
 #include <ncurses.h>    //  Interface
 
-static void *Supervisor_checkAndCleanUnusedSharedMemThread(void *arg);
-static void *Monitor_task(void *arg);
-static void *Supervisor_interfaceUpdateTask(void *arg);
-
+static int Supervisor_init(Supervisor *const me, const UserInputs *const userInputs);
+static pid_t Supervisor_checkNewTaskToTrace(Supervisor *const me);
 static int Supervisor_reserveInstance(Supervisor *const me);
 static int Supervisor_freeInstance(Supervisor *const me, int instanceNumber);
 static int Supervisor_checkIfTaskIsBeingTraced(Supervisor *const me, pid_t pid);
+static void *Supervisor_interfaceUpdateTask(void *arg);
+static void *Supervisor_checkAndCleanUnusedSharedMemThread(void *arg);
+
+static void Monitor_initMetrics(MonitorThread *const me);
+static void *Monitor_task(void *arg);
+
 static int UserInputs_read(UserInputs *const me, int argc, char *argv[]);
 
 int main(int argc, char *argv[]) 
 {
-    Supervisor supervisor;
+    static Supervisor supervisor;
     UserInputs userInputs;
 
     if (geteuid() != 0) {
@@ -80,7 +84,7 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-int Supervisor_init(Supervisor *const me, const UserInputs *const userInputs)
+static int Supervisor_init(Supervisor *const me, const UserInputs *const userInputs)
 {
     // config stack em heap to stay always allocated and avoid page faults during operation
     mlockall(MCL_CURRENT | MCL_FUTURE);
@@ -93,8 +97,7 @@ int Supervisor_init(Supervisor *const me, const UserInputs *const userInputs)
 
     // Adjust max and minumum values
     for (ssize_t i = 0; i < MAX_TRACED_TASKS; i++) {
-        me->monitor[i].metrics.minWorkTime = (uint64_t) -1;
-        me->monitor[i].metrics.maxWorkTime = 0;
+        Monitor_initMetrics(&me->monitor[i]);
     }
 
     memcpy(&me->userInputs, userInputs, sizeof(UserInputs));
@@ -102,7 +105,7 @@ int Supervisor_init(Supervisor *const me, const UserInputs *const userInputs)
     return 0;
 }
 
-pid_t Supervisor_checkNewTaskToTrace(Supervisor *const me)
+static pid_t Supervisor_checkNewTaskToTrace(Supervisor *const me)
 {
     int newTaskToTraceFound = 0;
     pid_t pid;
@@ -185,6 +188,15 @@ static void *Supervisor_checkAndCleanUnusedSharedMemThread(void *arg)
     pthread_exit(NULL);
 }
 
+
+static void Monitor_initMetrics(MonitorThread *const me)
+{
+    memset(&me->metrics, 0, sizeof(MonitorMetrics));
+
+    me->metrics.minWorkTime = (uint64_t) -1;
+    me->metrics.maxWorkTime = 0;
+}
+
 /**
  * @brief Each instance of this task is responsible for monitoring one user process.
  * 
@@ -200,10 +212,18 @@ static void *Monitor_task(void *arg)
     // 1º Open the shared mem as read only
     SharedMem_supervisorInit(&me->sharedMem, me->pid);
 
+    Monitor_initMetrics(me);
+
     while(1) {
         ssize_t numberOfBytesReceived = SharedMem_supervisorRead(&me->sharedMem, &me->telegram);
 
         if (numberOfBytesReceived != sizeof(Telegram)) {
+            if (numberOfBytesReceived == 0) {
+                if (PID_checkIfExist(me->pid != 1)) {
+                    // User task was closed
+                    pthread_exit(NULL);
+                }
+            }
             printf("Monitor %d: invalid telegram, received %ld bytes (should be %ld)\n", me->pid, numberOfBytesReceived, sizeof(Telegram));
             continue;
         }
