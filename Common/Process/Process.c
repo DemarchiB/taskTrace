@@ -11,6 +11,21 @@
 
 #include <sys/syscall.h>    // syscall
 
+#include <sched.h>            /* Definition of SCHED_* constants */
+#include <sys/syscall.h>      /* Definition of SYS_* constants */
+#include <unistd.h>
+
+struct sched_attr {
+    uint32_t size;              // Tamanho da estrutura em bytes
+    uint32_t sched_policy;      // Política de escalonamento
+    uint64_t sched_flags;       // Flags do escalonador (normalmente não é utilizado)
+    int32_t sched_nice;         // Valor nice do processo
+    uint32_t sched_priority;    // Prioridade do processo
+    uint64_t sched_runtime;     // Tempo de execução em nanossegundos
+    uint64_t sched_deadline;    // Prazo em nanossegundos
+    uint64_t sched_period;      // Período em nanossegundos
+};
+
 /**
  * @brief Return the curent process' PID
  * 
@@ -61,6 +76,74 @@ int PID_getSchedulerPolicy(pid_t pid, char *const policyAsString)
     }
 
     return policy;
+}
+
+/**
+ * @brief 
+ * 
+ * @param pid process id
+ * @param runtime output for the runtime value in ns
+ * @param deadline output for the deadline value in ns
+ * @param period output for the period value in ns
+ * @return int 
+ */
+int PID_getDeadlinePropeties(pid_t pid, 
+                            uint64_t *const runtime, 
+                            uint64_t *const deadline, 
+                            uint64_t *const period)
+{
+    if (PID_getSchedulerPolicy(pid, NULL) != SCHED_DEADLINE) {
+        return -1;
+    }
+
+    struct sched_attr attr = {0};
+
+    // Configure a política do escalonador
+    if (syscall(SYS_sched_getattr, pid, &attr, sizeof(attr), 0) != 0) {
+        return -2;
+    }
+
+    if (runtime != NULL) {
+        *runtime = attr.sched_runtime;
+    }
+
+    if (deadline != NULL) {
+        *deadline = attr.sched_deadline;
+    }
+
+    if (period != NULL) {
+        *period = attr.sched_period;
+    }
+
+    return 0;
+}
+
+/**
+ * @brief Change the scheduler policy of a process to SCHED_DEADLINE
+ * 
+ * @param pid process to change
+ * @param runtime in ns
+ * @param deadline in ns
+ * @param period in ns
+ * @return int 
+ */
+int PID_setDeadline(pid_t pid, uint64_t runtime, uint64_t deadline, uint64_t period)
+{
+    struct sched_attr attr = {0};
+
+    attr.size = sizeof(attr); // sizeof(struct sched_attr)
+    attr.sched_policy = SCHED_DEADLINE;
+    attr.sched_runtime = runtime;
+    attr.sched_deadline = deadline;
+    attr.sched_period = period;
+
+    // Configure a política do escalonador
+    if (syscall(SYS_sched_setattr, pid, &attr, 0) != 0) {
+        perror("Process: sched_setattr error.");
+        return -1;
+    }
+
+    return 0;
 }
 
 int PID_getPriority(pid_t pid)

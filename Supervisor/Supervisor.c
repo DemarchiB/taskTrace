@@ -260,7 +260,7 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
 
     sleep(3);
 
-    // // Inicializar o modo ncurses
+    // Inicializar o modo ncurses
     initscr();
     cbreak(); // Desabilitar buffering de linha
     noecho(); // Não exibir caracteres digitados
@@ -275,29 +275,104 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
     }
 
     char schedulerPolicy[20];
+    int currentLine;
+    uint64_t runtime, period, deadline;
 
     while (1) {
         clear(); // Limpar a tela
 
-        // Imprimir cabeçalho
-        mvprintw(0, 0, "PID    SCHEDTYPE    PRI    WORKTIME(us)     MAXTIME(us)    MINTIME(us)    USAGE%%");
+        currentLine = 0;
+
+        // 1º Mostra tarefas do tipo deadline
+        mvprintw(currentLine++, 0, "SCHED_DEADLINE TASKS: (all are PRI = RT)");
+        mvprintw(currentLine++, 0, "PID      PRI    WORKTIME(ms)    MINTIME(ms)     MAXTIME(ms)    RUNTIME(ms)    DEADLINE(ms)    PERIOD(ms)    MAX_USAGE%%");
 
         pthread_mutex_lock(&me->isTaskBeingTraced_mutex);
         for (ssize_t i = 0; i < MAX_TRACED_TASKS; i++) {
             if (me->isTaskBeingTraced[i]) {
-                if (PID_getSchedulerPolicy(me->monitor[i].pid, schedulerPolicy) < 0) {
+                int policy = PID_getSchedulerPolicy(me->monitor[i].pid, NULL);
+                if (policy != 6) { // 6 = sched_deadline
+                    continue;
+                }
+
+                if (PID_getDeadlinePropeties(me->monitor[i].pid, &runtime, &deadline, &period) != 0) {
+                    runtime = 0;
+                    deadline = 0;
+                    period = 0;
+                }
+
+                // Printa dados das tarefas
+                mvprintw(currentLine++, 0, "%-8d %-6s %-16.3f %-14.3f %-14.3f %-14.3f %-15.3f %-13.3f %-3.1f",
+                    me->monitor[i].pid,
+                    "rt",
+                    (float) (me->monitor[i].metrics.lastWorkTime / (1000 * 1000.0)),
+                    (float) (me->monitor[i].metrics.minWorkTime / (1000 * 1000.0)),
+                    (float) (me->monitor[i].metrics.maxWorkTime / (1000 * 1000.0)),
+                    (float) (runtime / (1000 * 1000.0)),
+                    (float) (deadline / (1000 * 1000.0)),
+                    (float) (period / (1000 * 1000.0)),
+                    (float) (me->monitor[i].metrics.maxWorkTime * 100.0 / runtime)
+                    );
+            }
+        }
+        pthread_mutex_unlock(&me->isTaskBeingTraced_mutex);
+
+        mvprintw(currentLine++, 0, "\n"); // Newline
+
+        // 2º Mostra tarefas do tipo FIFO
+        mvprintw(currentLine++, 0, "SCHED_FIFO TASKS:");
+
+        // Imprimir cabeçalho
+        mvprintw(currentLine++, 0, "PID      PRI    WORKTIME(us)    MINTIME(us)     MAXTIME(us)");
+
+        pthread_mutex_lock(&me->isTaskBeingTraced_mutex);
+        for (ssize_t i = 0; i < MAX_TRACED_TASKS; i++) {
+            if (me->isTaskBeingTraced[i]) {
+                int policy = PID_getSchedulerPolicy(me->monitor[i].pid, NULL);
+                if (policy != SCHED_FIFO) {
+                    continue;
+                }
+
+                // Printa dados das tarefas
+                mvprintw(currentLine++, 0, "%-8d %-6d %-16ld %-14ld %-14ld",
+                    me->monitor[i].pid,
+                    -1 - PID_getPriority(me->monitor[i].pid),
+                    me->monitor[i].metrics.lastWorkTime / 1000,
+                    me->monitor[i].metrics.minWorkTime / 1000,
+                    me->monitor[i].metrics.maxWorkTime / 1000
+                    );
+            }
+        }
+        pthread_mutex_unlock(&me->isTaskBeingTraced_mutex);
+        
+        mvprintw(currentLine++, 0, "\n"); // Newline
+
+        // 3º Mostra todos os outros tipos de tarefas
+        mvprintw(currentLine++, 0, "Other policys:");
+
+        // Imprimir cabeçalho
+        mvprintw(currentLine++, 0, "PID      SCHEDTYPE       PRI    WORKTIME(us)    MINTIME(us)     MAXTIME(us)");
+
+        pthread_mutex_lock(&me->isTaskBeingTraced_mutex);
+        for (ssize_t i = 0; i < MAX_TRACED_TASKS; i++) {
+            if (me->isTaskBeingTraced[i]) {
+                int policy = PID_getSchedulerPolicy(me->monitor[i].pid, schedulerPolicy);
+                if ((policy == SCHED_FIFO) || (policy == 6)) {
+                    continue;
+                }
+
+                if (policy < 0) {
                     snprintf(schedulerPolicy, sizeof(schedulerPolicy), "UNKNOWN");
                 }
 
                 // Printa dados das tarefas
-                mvprintw(i + 1, 0, "%-6d %-12s %-6d %-16ld %-14ld %-14ld %-6.1f",
+                mvprintw(currentLine++, 0, "%-8d %-15s %-6d %-16ld %-14ld %-14ld",
                     me->monitor[i].pid,
                     schedulerPolicy,
                     PID_getPriority(me->monitor[i].pid),
                     me->monitor[i].metrics.lastWorkTime / 1000,
-                    me->monitor[i].metrics.maxWorkTime / 1000,
                     me->monitor[i].metrics.minWorkTime / 1000,
-                    50.15
+                    me->monitor[i].metrics.maxWorkTime / 1000
                     );
             }
         }

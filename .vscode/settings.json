@@ -5,6 +5,7 @@
         "telegram.h": "c",
         "pthread.h": "c",
         "sharedmem.h": "c",
-        "limits": "c"
+        "limits": "c",
+        "process.h": "c"
     }
 }

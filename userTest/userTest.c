@@ -9,17 +9,26 @@
 
 void *user_task(void *arg) 
 {
-    (void) arg;
+    int taskNumber = *(int *)arg;
     TaskTrace taskTrace;
-    struct sched_param param = {60};
     pid_t pid = PID_get();
     printf("UserTask: Task created with pid %d\n", pid);
 
-    // Changing scheduler to SCHED_FIFO (RT)
-    if (sched_setscheduler(0, SCHED_FIFO, &param) == -1) {
-        printf("UserTask %d: Error changing scheduler to SCHED_FIFO: ", pid);
-        perror("");
-        return NULL;
+    // Odd process will be FIFO, even will be DEADLINE
+    if (taskNumber%2 == 0) {
+        if (PID_setDeadline(pid, 100 * 1000 * 1000, 300 * 1000 * 1000, 1 * 1000 * 1000 * 1000)) {
+            printf("UserTask %d: Error changing scheduler to deadline: ", pid);
+            perror("");
+            return NULL;
+        }
+    } else {
+        // Changing scheduler to SCHED_FIFO (RT)
+        struct sched_param param = {60};
+        if (sched_setscheduler(0, SCHED_FIFO, &param) == -1) {
+            printf("UserTask %d: Error changing scheduler to SCHED_FIFO: ", pid);
+            perror("");
+            return NULL;
+        }
     }
 
     if (TaskTrace_init(&taskTrace)) {
@@ -44,13 +53,18 @@ void *user_task(void *arg)
         t_cur.tv_sec = t_cur.tv_sec;
 
         // simulate some load
-        while ((((t_cur.tv_sec * 1000 * 1000 * 1000) + t_cur.tv_nsec) - ((t_ini.tv_sec * 1000 * 1000 * 1000) + t_ini.tv_nsec)) < pid * 1000) {
+        while ((((t_cur.tv_sec * 1000 * 1000 * 1000) + t_cur.tv_nsec) - ((t_ini.tv_sec * 1000 * 1000 * 1000) + t_ini.tv_nsec)) < pid * 100) {
             clock_gettime(CLOCK_MONOTONIC_RAW, &t_cur);
         }
 
         //usleep(pid);
         TaskTrace_traceWorkStop(&taskTrace);
-        sleep(2);
+
+        if (taskNumber%2 == 0) {
+            sched_yield();
+        } else {
+            sleep(1);
+        }
     }
 
     return NULL;
@@ -58,10 +72,15 @@ void *user_task(void *arg)
 
 int main() {
     pthread_t tasks[NUM_THREADS];
+    int taskNumber[NUM_THREADS];
+
+    for (int i = 0; i < NUM_THREADS; i++) {
+        taskNumber[i] = i;
+    }
 
     // Criação das tasks
     for (int i = 0; i < NUM_THREADS; i++) {
-        if (pthread_create(&tasks[i], NULL, user_task, NULL) != 0) {
+        if (pthread_create(&tasks[i], NULL, user_task, &taskNumber[i]) != 0) {
             perror("Erro ao criar a tarefa de usuário");
             exit(EXIT_FAILURE);
         }
