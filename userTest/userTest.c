@@ -16,7 +16,10 @@ void *user_task(void *arg)
 
     // Odd process will be FIFO, even will be DEADLINE
     if (taskNumber%2 == 0) {
-        if (PID_setDeadline(pid, 100 * 1000 * 1000, 300 * 1000 * 1000, 1 * 1000 * 1000 * 1000)) {
+        uint64_t runtimeInNs = 100 * 1000 * 1000;   // 100 ms reserved
+        uint64_t deadlineInNs = 300 * 1000 * 1000;  // 300 ms deadline
+        uint64_t periodInNs = 1000 * 1000 * 1000;   // 1s period
+        if (PID_setDeadline(pid, runtimeInNs, deadlineInNs, periodInNs)) {
             printf("UserTask %d: Error changing scheduler to deadline: ", pid);
             perror("");
             return NULL;
@@ -41,7 +44,8 @@ void *user_task(void *arg)
         return NULL;
     }
 
-
+    // const uint64_t workTime = (uint64_t) pid * 100;
+    const long int workTimeInNs = (long int) 10 * 1000 * 1000;  // 10ms for all tasks
 
     while(1) {
         struct timespec t_ini, t_cur;
@@ -53,11 +57,10 @@ void *user_task(void *arg)
         t_cur.tv_sec = t_cur.tv_sec;
 
         // simulate some load
-        while ((((t_cur.tv_sec * 1000 * 1000 * 1000) + t_cur.tv_nsec) - ((t_ini.tv_sec * 1000 * 1000 * 1000) + t_ini.tv_nsec)) < pid * 100) {
+        while ((((t_cur.tv_sec * 1000 * 1000 * 1000) + t_cur.tv_nsec) - ((t_ini.tv_sec * 1000 * 1000 * 1000) + t_ini.tv_nsec)) < workTimeInNs) {
             clock_gettime(CLOCK_MONOTONIC_RAW, &t_cur);
         }
 
-        //usleep(pid);
         TaskTrace_traceWorkStop(&taskTrace);
 
         if (taskNumber%2 == 0) {
@@ -77,6 +80,8 @@ int main() {
     for (int i = 0; i < NUM_THREADS; i++) {
         taskNumber[i] = i;
     }
+
+    printf("UserTest: Started with PID %d\n", PID_get());
 
     printf("UserTest: Creating threads\n");
 

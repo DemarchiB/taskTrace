@@ -1,2 +1,4 @@
 *.o
 userTest
+perf*
+trace*

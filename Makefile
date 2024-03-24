@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra
+CFLAGS = -Wall -Wextra -g
 LFLAGS = -pthread -lncurses
 
 ## Definições para compilação do supervisor
