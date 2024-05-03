@@ -49,11 +49,11 @@ int main(int argc, char *argv[])
         return -3;
     }
 
-    printf("Supervisor: Creating interface update task\n");
-    if (pthread_create(&supervisor.interfaceUpdateTask_id, NULL, Supervisor_interfaceUpdateTask, &supervisor) != 0) {
-        perror("Supervisor: Error creating interface update task");
-        return -4;
-    }
+    // printf("Supervisor: Creating interface update task\n");
+    // if (pthread_create(&supervisor.interfaceUpdateTask_id, NULL, Supervisor_interfaceUpdateTask, &supervisor) != 0) {
+    //     perror("Supervisor: Error creating interface update task");
+    //     return -4;
+    // }
 
     sleep(1);   // Wait for the cleanup task to make the first clean.
 
@@ -193,6 +193,9 @@ static void Monitor_initMetrics(MonitorThread *const me)
 {
     memset(&me->metrics, 0, sizeof(MonitorMetrics));
 
+    me->metrics.minLatency = (uint64_t) -1;
+    me->metrics.maxLatency = 0;
+
     me->metrics.minWorkTime = (uint64_t) -1;
     me->metrics.maxWorkTime = 0;
 }
@@ -235,10 +238,13 @@ static void *Monitor_task(void *arg)
 
         switch (me->telegram.code)
         {
-        case TelegramCode_startWorkPoint:
+        case TelegramCode_cyclicTaskFirstReady:
+            me->metrics.lastCyclicTaskReadyTime = (me->telegram.timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram.timestamp.tv_nsec);
+            break;
+        case TelegramCode_startWork:
             me->metrics.lastStartWorkTime = (me->telegram.timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram.timestamp.tv_nsec);
             break;
-        case TelegramCode_stopWorkPoint:
+        case TelegramCode_stopWork:
             me->metrics.lastStopWorkTime = (me->telegram.timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram.timestamp.tv_nsec);
 
             // Calculate the work time
@@ -247,13 +253,47 @@ static void *Monitor_task(void *arg)
             // Calculate the maximum and minimum values
             if (me->metrics.lastWorkTime > me->metrics.maxWorkTime) {
                 me->metrics.maxWorkTime = me->metrics.lastWorkTime;
-            }
-            
-            if (me->metrics.lastWorkTime < me->metrics.minWorkTime) {
+            } else if (me->metrics.lastWorkTime < me->metrics.minWorkTime) {
                 me->metrics.minWorkTime = me->metrics.lastWorkTime;
             }
 
-            // printf("Monitor %d: total work time = %ld ns\n", me->pid, me->metrics.lastWorkTime);
+            // Update cyclic tick to check if a deadline was missed
+            do {
+                if (me->metrics.lastCyclicTaskReadyTime == 0) {
+                    break;
+                }
+
+                uint64_t period = 0;
+                if (PID_getDeadlinePropeties(me->pid, NULL, NULL, &period) != 0) {
+                    printf("Monitor %d: Error, not able to read deadline period\n", me->pid);
+                    break;
+                }
+
+                // Calculate latency
+                me->metrics.lastLatency = me->metrics.lastStartWorkTime - me->metrics.lastCyclicTaskReadyTime;
+
+                if (me->metrics.lastLatency > me->metrics.maxLatency) {
+                    me->metrics.maxLatency = me->metrics.lastLatency;
+                } else if (me->metrics.lastLatency < me->metrics.minLatency) {
+                    me->metrics.minLatency = me->metrics.lastLatency;
+                }
+
+                // Calculate execution time
+                me->metrics.ET = me->metrics.lastStopWorkTime - me->metrics.lastCyclicTaskReadyTime;
+
+                if (me->metrics.ET > me->metrics.WCET) {
+                    me->metrics.WCET = me->metrics.ET;
+                }
+
+                // Update next tick where the task will be ready
+                while(me->metrics.lastCyclicTaskReadyTime < me->metrics.lastStopWorkTime) {
+                    me->metrics.lastCyclicTaskReadyTime += period;
+                }
+                
+                printf("Monitor %d: latency = %lu us, ET = %lu us\n", me->pid, me->metrics.lastLatency / 1000, me->metrics.ET / 1000);
+
+            } while(0);
+
             break;
         case TelegramCode_perfMark1Start:
             me->metrics.perfMarkStart[TelegramCode_perfMark1Start - TELEGRAM_PERFMARK_OFFSET] = 

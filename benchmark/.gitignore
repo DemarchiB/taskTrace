@@ -1,0 +1,4 @@
+*.o
+userTest
+perf*
+trace*

@@ -14,16 +14,28 @@ void *user_task(void *arg)
     pid_t pid = PID_get();
     printf("UserTask: Task created with pid %d\n", pid);
 
+    if (TaskTrace_init(&taskTrace)) {
+        printf("UserTask %d: Error initializing taskTrace\n", pid);
+        return NULL;
+    }
+
+    if (TaskTrace_enableRecording(&taskTrace)) {
+        printf("UserTask %d: Start recording returned error\n", pid);
+        return NULL;
+    }
+
     // Odd process will be FIFO, even will be DEADLINE
-    if (taskNumber%2 == 0) {
-        uint64_t runtimeInNs = 100 * 1000 * 1000;   // 100 ms reserved
-        uint64_t deadlineInNs = 300 * 1000 * 1000;  // 300 ms deadline
+    if (1) {//(taskNumber%2 == 0) {
+        uint64_t runtimeInNs = 10 * 1000 * 1000;   // 100 ms reserved
+        uint64_t deadlineInNs = 20 * 1000 * 1000;  // 300 ms deadline
         uint64_t periodInNs = 1000 * 1000 * 1000;   // 1s period
+        
         if (PID_setDeadline(pid, runtimeInNs, deadlineInNs, periodInNs)) {
             printf("UserTask %d: Error changing scheduler to deadline: ", pid);
             perror("");
             return NULL;
         }
+        TaskTrace_deadlineTaskStartPoint(&taskTrace);
     } else {
         // Changing scheduler to SCHED_FIFO (RT)
         struct sched_param param = {60};
@@ -32,16 +44,6 @@ void *user_task(void *arg)
             perror("");
             return NULL;
         }
-    }
-
-    if (TaskTrace_init(&taskTrace)) {
-        printf("UserTask %d: Error initializing taskTrace\n", pid);
-        return NULL;
-    }
-
-    if (TaskTrace_startRecording(&taskTrace)) {
-        printf("UserTask %d: Start recording returned error\n", pid);
-        return NULL;
     }
 
     // const uint64_t workTime = (uint64_t) pid * 100;

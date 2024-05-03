@@ -9,6 +9,13 @@
 #define MAX_NUMBER_OF_PERFORMANCE_MARKERS   1
 
 typedef struct {
+    uint64_t lastCyclicTaskReadyTime;   // Use to save the tick when the cyclic (deadline) task will be ready to run again
+    uint64_t maxLatency;    // The max amount of time taken for the cyclic task to run after being in the ready state
+    uint64_t minLatency;    // The min amount of time taken for the cyclic task to run after being in the ready state
+    uint64_t lastLatency;   // The last amount of time taken for the cyclic task to run after being in the ready state
+    uint64_t ET;            // Execution time
+    uint64_t WCET;          // Worst Case Execution Time
+
     uint64_t lastStartWorkTime; // Used to save the time of when user task started its work
     uint64_t lastStopWorkTime;  // Used to save the time of when user task finished its work
     uint64_t lastWorkTime;  // The amount of time that the user task spent until the end of its work
