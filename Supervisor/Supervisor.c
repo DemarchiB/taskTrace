@@ -263,10 +263,10 @@ static void *Monitor_task(void *arg)
                     break;
                 }
 
-                uint64_t period = 0;
-                if (PID_getDeadlinePropeties(me->pid, NULL, NULL, &period) != 0) {
-                    printf("Monitor %d: Error, not able to read deadline period\n", me->pid);
-                    break;
+                // This case can happens if the first tick was not 100% correct
+                if (me->metrics.lastStartWorkTime < me->metrics.lastCyclicTaskReadyTime) {
+                    //printf("Monitor %d: tick changed in %lu us\n", me->pid, (me->metrics.lastCyclicTaskReadyTime - me->metrics.lastCyclicTaskReadyTime) / 1000);
+                    me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartWorkTime;
                 }
 
                 // Calculate latency
@@ -285,12 +285,30 @@ static void *Monitor_task(void *arg)
                     me->metrics.WCET = me->metrics.ET;
                 }
 
-                // Update next tick where the task will be ready
-                while(me->metrics.lastCyclicTaskReadyTime < me->metrics.lastStopWorkTime) {
-                    me->metrics.lastCyclicTaskReadyTime += period;
+                //printf("Monitor %d: latency = %lu us, ET = %lu us\n", me->pid, me->metrics.lastLatency / 1000, me->metrics.ET / 1000);
+
+                // Read task deadline parameters
+                uint64_t period, deadline;
+                if (PID_getDeadlinePropeties(me->pid, NULL, &deadline, &period) != 0) {
+                    printf("Monitor %d: Error, not able to read deadline period\n", me->pid);
+                    break;
+                }
+
+                // Check if some deadline was lost
+                if (me->metrics.ET > deadline) {
+                    me->metrics.deadlineLostCount++;
                 }
                 
-                printf("Monitor %d: latency = %lu us, ET = %lu us\n", me->pid, me->metrics.lastLatency / 1000, me->metrics.ET / 1000);
+                // Update next tick where the task will be ready
+                int cycles = 0;
+                while(me->metrics.lastCyclicTaskReadyTime < me->metrics.lastStopWorkTime) {
+                    me->metrics.lastCyclicTaskReadyTime += period;
+                    cycles++;
+                }
+
+                if (cycles > 1) {   // if here, means that there was at least a runtime overflow.
+                    // printf("Monitor %d: %d cycles(s) to do the work of one cycle.\n", me->pid, cycles);
+                }
 
             } while(0);
 

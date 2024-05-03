@@ -26,8 +26,8 @@ void *user_task(void *arg)
 
     // Odd process will be FIFO, even will be DEADLINE
     if (1) {//(taskNumber%2 == 0) {
-        uint64_t runtimeInNs = 10 * 1000 * 1000;   // 100 ms reserved
-        uint64_t deadlineInNs = 20 * 1000 * 1000;  // 300 ms deadline
+        uint64_t runtimeInNs = 10 * 1000 * 1000;   // reserved runtime
+        uint64_t deadlineInNs = 100 * 1000 * 1000;  // deadline
         uint64_t periodInNs = 1000 * 1000 * 1000;   // 1s period
         
         if (PID_setDeadline(pid, runtimeInNs, deadlineInNs, periodInNs)) {
@@ -47,7 +47,7 @@ void *user_task(void *arg)
     }
 
     // const uint64_t workTime = (uint64_t) pid * 100;
-    const long int workTimeInNs = (long int) 10 * 1000 * 1000;  // 10ms for all tasks
+    const long int workTimeInNs = (long int) 2 * 1000 * 1000;
 
     while(1) {
         struct timespec t_ini, t_cur;

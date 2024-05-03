@@ -15,6 +15,7 @@ typedef struct {
     uint64_t lastLatency;   // The last amount of time taken for the cyclic task to run after being in the ready state
     uint64_t ET;            // Execution time
     uint64_t WCET;          // Worst Case Execution Time
+    uint64_t deadlineLostCount;
 
     uint64_t lastStartWorkTime; // Used to save the time of when user task started its work
     uint64_t lastStopWorkTime;  // Used to save the time of when user task finished its work
