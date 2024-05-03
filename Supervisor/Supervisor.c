@@ -49,11 +49,11 @@ int main(int argc, char *argv[])
         return -3;
     }
 
-    // printf("Supervisor: Creating interface update task\n");
-    // if (pthread_create(&supervisor.interfaceUpdateTask_id, NULL, Supervisor_interfaceUpdateTask, &supervisor) != 0) {
-    //     perror("Supervisor: Error creating interface update task");
-    //     return -4;
-    // }
+    printf("Supervisor: Creating interface update task\n");
+    if (pthread_create(&supervisor.interfaceUpdateTask_id, NULL, Supervisor_interfaceUpdateTask, &supervisor) != 0) {
+        perror("Supervisor: Error creating interface update task");
+        return -4;
+    }
 
     sleep(1);   // Wait for the cleanup task to make the first clean.
 
@@ -263,9 +263,8 @@ static void *Monitor_task(void *arg)
                     break;
                 }
 
-                // This case can happens if the first tick was not 100% correct
+                // Autoajust the ready tick in case the first tick was not 100% correct
                 if (me->metrics.lastStartWorkTime < me->metrics.lastCyclicTaskReadyTime) {
-                    //printf("Monitor %d: tick changed in %lu us\n", me->pid, (me->metrics.lastCyclicTaskReadyTime - me->metrics.lastCyclicTaskReadyTime) / 1000);
                     me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartWorkTime;
                 }
 
@@ -285,29 +284,32 @@ static void *Monitor_task(void *arg)
                     me->metrics.WCET = me->metrics.ET;
                 }
 
-                //printf("Monitor %d: latency = %lu us, ET = %lu us\n", me->pid, me->metrics.lastLatency / 1000, me->metrics.ET / 1000);
-
                 // Read task deadline parameters
-                uint64_t period, deadline;
-                if (PID_getDeadlinePropeties(me->pid, NULL, &deadline, &period) != 0) {
+                uint64_t runtime, period, deadline;
+                if (PID_getDeadlinePropeties(me->pid, &runtime, &deadline, &period) != 0) {
                     printf("Monitor %d: Error, not able to read deadline period\n", me->pid);
                     break;
                 }
 
-                // Check if some deadline was lost
+                // Check for deadline lost
                 if (me->metrics.ET > deadline) {
                     me->metrics.deadlineLostCount++;
                 }
+
+                // Check for task runtime overruns
+                if (me->metrics.lastWorkTime > runtime) {
+                    me->metrics.runtimeOverrunCount++;
+
+                    // Check for task "throttled" or "depleted" in case of overruns
+                    if (me->metrics.lastWorkTime > period) {
+                        me->metrics.taskDepletedCount++;
+                    }
+                }
                 
                 // Update next tick where the task will be ready
-                int cycles = 0;
+                // Here I have a while cause there could have happend some runtime overflows
                 while(me->metrics.lastCyclicTaskReadyTime < me->metrics.lastStopWorkTime) {
                     me->metrics.lastCyclicTaskReadyTime += period;
-                    cycles++;
-                }
-
-                if (cycles > 1) {   // if here, means that there was at least a runtime overflow.
-                    // printf("Monitor %d: %d cycles(s) to do the work of one cycle.\n", me->pid, cycles);
                 }
 
             } while(0);
@@ -379,7 +381,7 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
 
         // 1º Mostra tarefas do tipo deadline
         mvprintw(currentLine++, 0, "SCHED_DEADLINE TASKS:");
-        mvprintw(currentLine++, 0, "PID      PRI    WORKTIME(ms)    MINTIME(ms)     MAXTIME(ms)    RUNTIME(ms)    DEADLINE(ms)    PERIOD(ms)    RUN_USAGE%%    PROC_USAGE%%");
+        mvprintw(currentLine++, 0, "PID      PRI    WORKTIME(ms)    MINTIME(ms)     MAXTIME(ms)    Latency(us)   maxLat(us)   WCET(ms)  dlLosts  rtOverrun  depleted   RUNTIME(ms)    DEADLINE(ms)    PERIOD(ms)    RUN_USAGE%%    PROC_USAGE%%");
 
         pthread_mutex_lock(&me->isTaskBeingTraced_mutex);
         for (ssize_t i = 0; i < MAX_TRACED_TASKS; i++) {
@@ -396,12 +398,18 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
                 }
 
                 // Printa dados das tarefas
-                mvprintw(currentLine++, 0, "%-8d %-6s %-16.3f %-14.3f %-14.3f %-14.3f %-15.3f %-13.3f %-13.1f %-3.1f",
+                mvprintw(currentLine++, 0, "%-8d %-6s %-15.3f %-15.3f %-14.3f %-13.1f %-12.1f %-9.1f %-8d %-10d %-10d %-14.3f %-15.3f %-13.3f %-13.1f %-3.1f",
                     me->monitor[i].pid,
                     "rt",
                     (float) (me->monitor[i].metrics.lastWorkTime / (1000 * 1000.0)),
                     (float) (me->monitor[i].metrics.minWorkTime / (1000 * 1000.0)),
                     (float) (me->monitor[i].metrics.maxWorkTime / (1000 * 1000.0)),
+                    (float) (me->monitor[i].metrics.lastLatency / (1000.0)),
+                    (float) (me->monitor[i].metrics.maxLatency / (1000.0)),
+                    (float) (me->monitor[i].metrics.WCET / (1000 * 1000.0)),
+                    (uint32_t) (me->monitor[i].metrics.deadlineLostCount),
+                    (uint32_t) (me->monitor[i].metrics.runtimeOverrunCount),
+                    (uint32_t) (me->monitor[i].metrics.taskDepletedCount),
                     (float) (runtime / (1000 * 1000.0)),
                     (float) (deadline / (1000 * 1000.0)),
                     (float) (period / (1000 * 1000.0)),
@@ -429,7 +437,7 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
                 }
 
                 // Printa dados das tarefas
-                mvprintw(currentLine++, 0, "%-8d %-6d %-16ld %-14ld %-14ld",
+                mvprintw(currentLine++, 0, "%-8d %-6d %-15ld %-15ld %-14ld",
                     me->monitor[i].pid,
                     -1 - PID_getPriority(me->monitor[i].pid),
                     me->monitor[i].metrics.lastWorkTime / 1000,
