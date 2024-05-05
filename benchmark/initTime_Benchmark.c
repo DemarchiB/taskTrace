@@ -35,7 +35,7 @@ void *initTime_Benchmark_task(void *arg)
         return NULL;
     }
     clock_gettime(CLOCK_MONOTONIC_RAW, &t1);
-    TaskTrace_deadlineTaskStartPoint(&taskTrace);
+    TaskTrace_traceDeadlineTaskStartPoint(&taskTrace);
 
     clock_gettime(CLOCK_MONOTONIC_RAW, &t2);
     

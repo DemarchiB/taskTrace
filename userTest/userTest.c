@@ -39,12 +39,12 @@ void *user_deadline_task(void *arg)
         perror("");
         return NULL;
     }
-    TaskTrace_deadlineTaskStartPoint(&taskTrace);
+    TaskTrace_traceDeadlineTaskStartPoint(&taskTrace);
 
 
     while(1) {
         struct timespec t_ini, t_cur;
-        TaskTrace_traceWorkStart(&taskTrace);
+        TaskTrace_traceExecutionStart(&taskTrace);
         
         // Read the actual time
         clock_gettime(CLOCK_MONOTONIC_RAW, &t_ini);
@@ -56,7 +56,7 @@ void *user_deadline_task(void *arg)
             clock_gettime(CLOCK_MONOTONIC_RAW, &t_cur);
         }
 
-        TaskTrace_traceWorkStop(&taskTrace);
+        TaskTrace_traceExecutionStop(&taskTrace);
 
         sched_yield();
     }
@@ -95,7 +95,7 @@ void *user_fifo_task(void *arg)
 
     while(1) {
         struct timespec t_ini, t_cur;
-        TaskTrace_traceWorkStart(&taskTrace);
+        TaskTrace_traceExecutionStart(&taskTrace);
         
         // Read the actual time
         clock_gettime(CLOCK_MONOTONIC_RAW, &t_ini);
@@ -107,7 +107,7 @@ void *user_fifo_task(void *arg)
             clock_gettime(CLOCK_MONOTONIC_RAW, &t_cur);
         }
 
-        TaskTrace_traceWorkStop(&taskTrace);
+        TaskTrace_traceExecutionStop(&taskTrace);
 
         sleep(1);
     }

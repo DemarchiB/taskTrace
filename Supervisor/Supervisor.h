@@ -13,19 +13,16 @@ typedef struct {
     uint64_t maxLatency;    // The max amount of time taken for the cyclic task to run after being in the ready state
     uint64_t minLatency;    // The min amount of time taken for the cyclic task to run after being in the ready state
     uint64_t lastLatency;   // The last amount of time taken for the cyclic task to run after being in the ready state
-    uint64_t ET;            // Execution time
-    uint64_t WCET;          // Worst Case Execution Time
     uint32_t deadlineLostCount;     // Count the amount of lost deadlines
     uint32_t runtimeOverrunCount;   // Count the amount of time the task overrun its runtime
     uint32_t taskDepletedCount;     // Count the amount of time the task overrun its runtime and was "throttled" or "depleted"
 
-
-    uint64_t lastStartWorkTime; // Used to save the time of when user task started its work
-    uint64_t lastStopWorkTime;  // Used to save the time of when user task finished its work
-    uint64_t lastWorkTime;  // The amount of time that the user task spent until the end of its work
-
-    uint64_t maxWorkTime;   // The maximum time spent by the user task to finish its work
-    uint64_t minWorkTime;   // The minimum time spent by the user task to finish its work
+    uint64_t lastStartExecutionTime; // Used to save the time of when user task started its work
+    uint64_t lastStopExecutionTime;  // Used to save the time of when user task finished its work
+    
+    uint64_t lastET;            // Execution time
+    uint64_t minET;   // The minimum Execution time
+    uint64_t WCET;          // Worst Case Execution Time    (maximum execution time)
 
     uint64_t perfMarkStart[MAX_NUMBER_OF_PERFORMANCE_MARKERS];
     uint64_t perfMarkStop[MAX_NUMBER_OF_PERFORMANCE_MARKERS];
@@ -35,6 +32,7 @@ typedef struct {
 typedef struct {
     pthread_t id;   // thread id
     pid_t pid;        // user pid that is being monitored by this thread
+    int policy;         // Used to know if the task that is being monitored is a deadline task or other type
     SharedMem sharedMem;    // The memory shared between the user process and the monitor process
     Telegram telegram;    // to be used as rx buffer
 

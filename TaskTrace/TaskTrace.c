@@ -77,7 +77,7 @@ int TaskTrace_disableRecording(TaskTrace *const me)
     return 0;
 }
 
-int TaskTrace_deadlineTaskStartPoint(TaskTrace *const me)
+int TaskTrace_traceDeadlineTaskStartPoint(TaskTrace *const me)
 {
     if (!me->isInitiallized || !me->isRecording) {
         return -1;
@@ -89,14 +89,14 @@ int TaskTrace_deadlineTaskStartPoint(TaskTrace *const me)
     return TaskTrace_sendTelegram(me);
 }
 
-int TaskTrace_traceWorkStart(TaskTrace *const me)
+int TaskTrace_traceExecutionStart(TaskTrace *const me)
 {
     if (!me->isInitiallized || !me->isRecording) {
         return -1;
     }
 
     me->telegram.pid = me->pid;
-    me->telegram.code = TelegramCode_startWork;
+    me->telegram.code = TelegramCode_startExecutionTime;
 
     // Read the actual time
     if (clock_gettime(CLOCK_MONOTONIC_RAW, &me->telegram.timestamp) != 0) {
@@ -113,14 +113,14 @@ int TaskTrace_traceWorkStart(TaskTrace *const me)
     return 0;
 }
 
-int TaskTrace_traceWorkStop(TaskTrace *const me)
+int TaskTrace_traceExecutionStop(TaskTrace *const me)
 {
     if (!me->isInitiallized || !me->isRecording) {
         return -1;
     }
 
     me->telegram.pid = me->pid;
-    me->telegram.code = TelegramCode_stopWork;
+    me->telegram.code = TelegramCode_stopExecutionTime;
 
     // Read the actual time
     if (clock_gettime(CLOCK_MONOTONIC_RAW, &me->telegram.timestamp) != 0) {

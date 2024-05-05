@@ -10,6 +10,8 @@
 
 #include <ncurses.h>    //  Interface
 
+#define SCHED_DEADLINE		6   
+
 static int Supervisor_init(Supervisor *const me, const UserInputs *const userInputs);
 static pid_t Supervisor_checkNewTaskToTrace(Supervisor *const me);
 static int Supervisor_reserveInstance(Supervisor *const me);
@@ -18,6 +20,7 @@ static int Supervisor_checkIfTaskIsBeingTraced(Supervisor *const me, pid_t pid);
 static void *Supervisor_interfaceUpdateTask(void *arg);
 static void *Supervisor_checkAndCleanUnusedSharedMemThread(void *arg);
 
+static void Monitor_init(MonitorThread *const me);
 static void Monitor_initMetrics(MonitorThread *const me);
 static void *Monitor_task(void *arg);
 
@@ -93,11 +96,6 @@ static int Supervisor_init(Supervisor *const me, const UserInputs *const userInp
 
     if (pthread_mutex_init(&me->isTaskBeingTraced_mutex, NULL) != 0) {
         return -1;
-    }
-
-    // Adjust max and minumum values
-    for (ssize_t i = 0; i < MAX_TRACED_TASKS; i++) {
-        Monitor_initMetrics(&me->monitor[i]);
     }
 
     memcpy(&me->userInputs, userInputs, sizeof(UserInputs));
@@ -188,16 +186,19 @@ static void *Supervisor_checkAndCleanUnusedSharedMemThread(void *arg)
     pthread_exit(NULL);
 }
 
+static void Monitor_init(MonitorThread *const me)
+{
+    me->policy = PID_getSchedulerPolicy(me->pid, NULL);
+
+    Monitor_initMetrics(me);
+}
 
 static void Monitor_initMetrics(MonitorThread *const me)
 {
     memset(&me->metrics, 0, sizeof(MonitorMetrics));
 
     me->metrics.minLatency = (uint64_t) -1;
-    me->metrics.maxLatency = 0;
-
-    me->metrics.minWorkTime = (uint64_t) -1;
-    me->metrics.maxWorkTime = 0;
+    me->metrics.minET = (uint64_t) -1;
 }
 
 /**
@@ -212,10 +213,9 @@ static void *Monitor_task(void *arg)
     
     printf("Supervisor: Monitor task for pid %d created\n", me->pid);
     
-    // 1º Open the shared mem as read only
     SharedMem_supervisorInit(&me->sharedMem, me->pid);
 
-    Monitor_initMetrics(me);
+    Monitor_init(me);
 
     while(1) {
         ssize_t numberOfBytesReceived = SharedMem_supervisorRead(&me->sharedMem, &me->telegram);
@@ -241,77 +241,78 @@ static void *Monitor_task(void *arg)
         case TelegramCode_cyclicTaskFirstReady:
             me->metrics.lastCyclicTaskReadyTime = (me->telegram.timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram.timestamp.tv_nsec);
             break;
-        case TelegramCode_startWork:
-            me->metrics.lastStartWorkTime = (me->telegram.timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram.timestamp.tv_nsec);
+        case TelegramCode_startExecutionTime:
+            me->metrics.lastStartExecutionTime = (me->telegram.timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram.timestamp.tv_nsec);
             break;
-        case TelegramCode_stopWork:
-            me->metrics.lastStopWorkTime = (me->telegram.timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram.timestamp.tv_nsec);
+        case TelegramCode_stopExecutionTime:
+            me->metrics.lastStopExecutionTime = (me->telegram.timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram.timestamp.tv_nsec);
 
-            // Calculate the work time
-            me->metrics.lastWorkTime = me->metrics.lastStopWorkTime - me->metrics.lastStartWorkTime;
+            // Calculate the execution time
+            me->metrics.lastET = me->metrics.lastStopExecutionTime - me->metrics.lastStartExecutionTime;
 
-            // Calculate the maximum and minimum values
-            if (me->metrics.lastWorkTime > me->metrics.maxWorkTime) {
-                me->metrics.maxWorkTime = me->metrics.lastWorkTime;
-            } else if (me->metrics.lastWorkTime < me->metrics.minWorkTime) {
-                me->metrics.minWorkTime = me->metrics.lastWorkTime;
+            // Calculate the maximum and minimum execution time values
+            if (me->metrics.lastET > me->metrics.WCET) {
+                me->metrics.WCET = me->metrics.lastET;
+            } else if (me->metrics.lastET < me->metrics.minET) {
+                me->metrics.minET = me->metrics.lastET;
             }
 
-            // Update cyclic tick to check if a deadline was missed
             do {
-                if (me->metrics.lastCyclicTaskReadyTime == 0) {
-                    break;
-                }
+                if (me->policy == SCHED_DEADLINE) {
+                    // Read task deadline parameters
+                    uint64_t runtime, period, deadline;
+                    if (PID_getDeadlinePropeties(me->pid, &runtime, &deadline, &period) != 0) {
+                        me->policy = PID_getSchedulerPolicy(me->pid, NULL);
+                        if (me->policy != SCHED_DEADLINE) {
+                            printf("Monitor %d: Error, not able to read deadline properties cause user changed the policy to %d\n", me->pid, me->policy);
+                        } else {
+                            printf("Monitor %d: Error, not able to read deadline properties\n", me->pid);
+                        }
+                        break;
+                    }
 
-                // Autoajust the ready tick in case the first tick was not 100% correct
-                if (me->metrics.lastStartWorkTime < me->metrics.lastCyclicTaskReadyTime) {
-                    me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartWorkTime;
-                }
+                    // Calculate latency if user provided the first trace tick
+                    do {
+                        if (me->metrics.lastCyclicTaskReadyTime == 0) {
+                            break;
+                        }
 
-                // Calculate latency
-                me->metrics.lastLatency = me->metrics.lastStartWorkTime - me->metrics.lastCyclicTaskReadyTime;
+                        // Autoajust the ready tick in case the first tick was not 100% correct
+                        if (me->metrics.lastStartExecutionTime < me->metrics.lastCyclicTaskReadyTime) {
+                            me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartExecutionTime;
+                        }
 
-                if (me->metrics.lastLatency > me->metrics.maxLatency) {
-                    me->metrics.maxLatency = me->metrics.lastLatency;
-                } else if (me->metrics.lastLatency < me->metrics.minLatency) {
-                    me->metrics.minLatency = me->metrics.lastLatency;
-                }
+                        // Calculate latency
+                        me->metrics.lastLatency = me->metrics.lastStartExecutionTime - me->metrics.lastCyclicTaskReadyTime;
 
-                // Calculate execution time
-                me->metrics.ET = me->metrics.lastStopWorkTime - me->metrics.lastCyclicTaskReadyTime;
+                        if (me->metrics.lastLatency > me->metrics.maxLatency) {
+                            me->metrics.maxLatency = me->metrics.lastLatency;
+                        } else if (me->metrics.lastLatency < me->metrics.minLatency) {
+                            me->metrics.minLatency = me->metrics.lastLatency;
+                        }
+                        
+                        // Update next tick where the task will be ready
+                        // Here I have a while cause there could have happend some runtime overflows
+                        while(me->metrics.lastCyclicTaskReadyTime < me->metrics.lastStopExecutionTime) {
+                            me->metrics.lastCyclicTaskReadyTime += period;
+                        }
+                    } while(0);
 
-                if (me->metrics.ET > me->metrics.WCET) {
-                    me->metrics.WCET = me->metrics.ET;
-                }
+                    // Check for deadline lost
+                    if (me->metrics.lastET + me->metrics.lastLatency > deadline) {
+                        me->metrics.deadlineLostCount++;
+                    }
 
-                // Read task deadline parameters
-                uint64_t runtime, period, deadline;
-                if (PID_getDeadlinePropeties(me->pid, &runtime, &deadline, &period) != 0) {
-                    printf("Monitor %d: Error, not able to read deadline period\n", me->pid);
-                    break;
-                }
+                    // Check for task runtime overruns
+                    if (me->metrics.lastET > runtime) {
+                        me->metrics.runtimeOverrunCount++;
 
-                // Check for deadline lost
-                if (me->metrics.ET > deadline) {
-                    me->metrics.deadlineLostCount++;
-                }
-
-                // Check for task runtime overruns
-                if (me->metrics.lastWorkTime > runtime) {
-                    me->metrics.runtimeOverrunCount++;
-
-                    // Check for task "throttled" or "depleted" in case of overruns
-                    if (me->metrics.lastWorkTime > period) {
-                        me->metrics.taskDepletedCount++;
+                        // Check for task "throttled" or "depleted" in case of overruns
+                        if (me->metrics.lastET > period) {
+                            me->metrics.taskDepletedCount++;
+                        }
                     }
                 }
-                
-                // Update next tick where the task will be ready
-                // Here I have a while cause there could have happend some runtime overflows
-                while(me->metrics.lastCyclicTaskReadyTime < me->metrics.lastStopWorkTime) {
-                    me->metrics.lastCyclicTaskReadyTime += period;
-                }
-
             } while(0);
 
             break;
@@ -324,7 +325,7 @@ static void *Monitor_task(void *arg)
                 (me->telegram.timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram.timestamp.tv_nsec);
             me->metrics.perfMartTotalTime[TelegramCode_perfMark1End - TELEGRAM_PERFMARK_OFFSET - 1] = 
                 me->metrics.perfMarkStop[TelegramCode_perfMark1End - TELEGRAM_PERFMARK_OFFSET - 1] - me->metrics.perfMarkStart[0];
-            // printf("Monitor %d: performance mark %d work time = %ld ns\n", me->pid, TelegramCode_perfMark1Start - TELEGRAM_PERFMARK_OFFSET + 1, me->metrics.lastWorkTime);
+            // printf("Monitor %d: performance mark %d work time = %ld ns\n", me->pid, TelegramCode_perfMark1Start - TELEGRAM_PERFMARK_OFFSET + 1, me->metrics.lastExecutionTime);
             break;
         default:
             // printf("Monitor %d: Error, invalid code (%d) received\n", me->pid, me->telegram.code);
@@ -334,7 +335,7 @@ static void *Monitor_task(void *arg)
         // printf("Monitor %d: Telegram received successfully: \n", me->pid);
         // printf("       pid:      %d\n", me->telegram[0].pid);
         // printf("       code:     %d\n", me->telegram[0].code);
-        // printf("       time(ns): %ld\n", me->lastStartWorkTime);
+        // printf("       time(ns): %ld\n", me->lastStartExecutionTime);
     }
 
     pthread_exit(NULL);
@@ -387,7 +388,7 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
         for (ssize_t i = 0; i < MAX_TRACED_TASKS; i++) {
             if (me->isTaskBeingTraced[i]) {
                 int policy = PID_getSchedulerPolicy(me->monitor[i].pid, NULL);
-                if (policy != 6) { // 6 = sched_deadline
+                if (policy != SCHED_DEADLINE) { // 6 = sched_deadline
                     continue;
                 }
 
@@ -401,9 +402,9 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
                 mvprintw(currentLine++, 0, "%-8d %-6s %-15.3f %-15.3f %-14.3f %-13.1f %-12.1f %-9.1f %-8d %-10d %-10d %-14.3f %-15.3f %-13.3f %-13.1f %-3.1f",
                     me->monitor[i].pid,
                     "rt",
-                    (float) (me->monitor[i].metrics.lastWorkTime / (1000 * 1000.0)),
-                    (float) (me->monitor[i].metrics.minWorkTime / (1000 * 1000.0)),
-                    (float) (me->monitor[i].metrics.maxWorkTime / (1000 * 1000.0)),
+                    (float) (me->monitor[i].metrics.lastET / (1000 * 1000.0)),
+                    (float) (me->monitor[i].metrics.minET / (1000 * 1000.0)),
+                    (float) (me->monitor[i].metrics.WCET / (1000 * 1000.0)),
                     (float) (me->monitor[i].metrics.lastLatency / (1000.0)),
                     (float) (me->monitor[i].metrics.maxLatency / (1000.0)),
                     (float) (me->monitor[i].metrics.WCET / (1000 * 1000.0)),
@@ -413,8 +414,8 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
                     (float) (runtime / (1000 * 1000.0)),
                     (float) (deadline / (1000 * 1000.0)),
                     (float) (period / (1000 * 1000.0)),
-                    (float) (me->monitor[i].metrics.maxWorkTime * 100.0 / runtime),
-                    (float) (me->monitor[i].metrics.maxWorkTime * 100.0 / runtime) * ( (float) runtime / (float) period)
+                    (float) (me->monitor[i].metrics.WCET * 100.0 / runtime),
+                    (float) (me->monitor[i].metrics.WCET * 100.0 / runtime) * ( (float) runtime / (float) period)
                     );
             }
         }
@@ -440,9 +441,9 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
                 mvprintw(currentLine++, 0, "%-8d %-6d %-15ld %-15ld %-14ld",
                     me->monitor[i].pid,
                     -1 - PID_getPriority(me->monitor[i].pid),
-                    me->monitor[i].metrics.lastWorkTime / 1000,
-                    me->monitor[i].metrics.minWorkTime / 1000,
-                    me->monitor[i].metrics.maxWorkTime / 1000
+                    me->monitor[i].metrics.lastET / 1000,
+                    me->monitor[i].metrics.minET / 1000,
+                    me->monitor[i].metrics.WCET / 1000
                     );
             }
         }
@@ -473,9 +474,9 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
                     me->monitor[i].pid,
                     schedulerPolicy,
                     PID_getPriority(me->monitor[i].pid),
-                    me->monitor[i].metrics.lastWorkTime / 1000,
-                    me->monitor[i].metrics.minWorkTime / 1000,
-                    me->monitor[i].metrics.maxWorkTime / 1000
+                    me->monitor[i].metrics.lastET / 1000,
+                    me->monitor[i].metrics.minET / 1000,
+                    me->monitor[i].metrics.WCET / 1000
                     );
             }
         }

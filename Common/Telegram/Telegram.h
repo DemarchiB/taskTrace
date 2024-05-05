@@ -10,8 +10,8 @@
 
 typedef enum {
     TelegramCode_cyclicTaskFirstReady,
-    TelegramCode_startWork,
-    TelegramCode_stopWork,
+    TelegramCode_startExecutionTime,
+    TelegramCode_stopExecutionTime,
     TelegramCode_perfMark1Start = TELEGRAM_PERFMARK_OFFSET,
     TelegramCode_perfMark1End,
     NumberOfTelegramCodes,
