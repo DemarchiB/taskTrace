@@ -10,7 +10,9 @@
 
 #include <ncurses.h>    //  Interface
 
-#define SCHED_DEADLINE		6   
+#ifndef SCHED_DEADLINE
+#define SCHED_DEADLINE  6
+#endif
 
 static int Supervisor_init(Supervisor *const me, const UserInputs *const userInputs);
 static pid_t Supervisor_checkNewTaskToTrace(Supervisor *const me);
