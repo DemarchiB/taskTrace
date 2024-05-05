@@ -271,32 +271,34 @@ static void *Monitor_task(void *arg)
                         break;
                     }
 
-                    // Calculate latency if user provided the first trace tick
-                    do {
-                        if (me->metrics.lastCyclicTaskReadyTime == 0) {
-                            break;
-                        }
+                    /*
+                        Calculate latency if user provided the first trace tick
+                        If user didn't call the trace for DeadlineTaskStartPoint, then I try to estimate using the trace point of the start exect time.
+                        This might work we cause I also have a autoadjust, that will stay tuning this value forever.
+                    */
+                    if (me->metrics.lastCyclicTaskReadyTime == 0) {
+                        me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartExecutionTime;
+                    }
 
-                        // Autoajust the ready tick in case the first tick was not 100% correct
-                        if (me->metrics.lastStartExecutionTime < me->metrics.lastCyclicTaskReadyTime) {
-                            me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartExecutionTime;
-                        }
+                    // Autoajust the ready tick in case the first tick was not 100% correct
+                    if (me->metrics.lastStartExecutionTime < me->metrics.lastCyclicTaskReadyTime) {
+                        me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartExecutionTime;
+                    }
 
-                        // Calculate latency
-                        me->metrics.lastLatency = me->metrics.lastStartExecutionTime - me->metrics.lastCyclicTaskReadyTime;
+                    // Calculate latency
+                    me->metrics.lastLatency = me->metrics.lastStartExecutionTime - me->metrics.lastCyclicTaskReadyTime;
 
-                        if (me->metrics.lastLatency > me->metrics.maxLatency) {
-                            me->metrics.maxLatency = me->metrics.lastLatency;
-                        } else if (me->metrics.lastLatency < me->metrics.minLatency) {
-                            me->metrics.minLatency = me->metrics.lastLatency;
-                        }
-                        
-                        // Update next tick where the task will be ready
-                        // Here I have a while cause there could have happend some runtime overflows
-                        while(me->metrics.lastCyclicTaskReadyTime < me->metrics.lastStopExecutionTime) {
-                            me->metrics.lastCyclicTaskReadyTime += period;
-                        }
-                    } while(0);
+                    if (me->metrics.lastLatency > me->metrics.maxLatency) {
+                        me->metrics.maxLatency = me->metrics.lastLatency;
+                    } else if (me->metrics.lastLatency < me->metrics.minLatency) {
+                        me->metrics.minLatency = me->metrics.lastLatency;
+                    }
+                    
+                    // Update next tick where the task will be ready
+                    // Here I have a while cause there could have happend some runtime overflows
+                    while(me->metrics.lastCyclicTaskReadyTime < me->metrics.lastStopExecutionTime) {
+                        me->metrics.lastCyclicTaskReadyTime += period;
+                    }
 
                     // Check for deadline lost
                     if (me->metrics.lastET + me->metrics.lastLatency > deadline) {
@@ -382,7 +384,7 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
 
         // 1º Mostra tarefas do tipo deadline
         mvprintw(currentLine++, 0, "SCHED_DEADLINE TASKS:");
-        mvprintw(currentLine++, 0, "PID      PRI    WORKTIME(ms)    MINTIME(ms)     MAXTIME(ms)    Latency(us)   maxLat(us)   WCET(ms)  dlLosts  rtOverrun  depleted   RUNTIME(ms)    DEADLINE(ms)    PERIOD(ms)    RUN_USAGE%%    PROC_USAGE%%");
+        mvprintw(currentLine++, 0, "PID      PRI    EXECTIME(ms)    WCET(ms)    Latency(us)   maxLat(us)  dlLosts  rtOverrun  depleted   RUNTIME(ms)    DEADLINE(ms)    PERIOD(ms)    RUN_USAGE%%    PROC_USAGE%%");
 
         pthread_mutex_lock(&me->isTaskBeingTraced_mutex);
         for (ssize_t i = 0; i < MAX_TRACED_TASKS; i++) {
@@ -399,15 +401,13 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
                 }
 
                 // Printa dados das tarefas
-                mvprintw(currentLine++, 0, "%-8d %-6s %-15.3f %-15.3f %-14.3f %-13.1f %-12.1f %-9.1f %-8d %-10d %-10d %-14.3f %-15.3f %-13.3f %-13.1f %-3.1f",
+                mvprintw(currentLine++, 0, "%-8d %-6s %-15.3f %-11.3f %-13.1f %-11.1f %-8d %-10d %-10d %-14.3f %-15.3f %-13.3f %-13.1f %-3.1f",
                     me->monitor[i].pid,
                     "rt",
                     (float) (me->monitor[i].metrics.lastET / (1000 * 1000.0)),
-                    (float) (me->monitor[i].metrics.minET / (1000 * 1000.0)),
                     (float) (me->monitor[i].metrics.WCET / (1000 * 1000.0)),
                     (float) (me->monitor[i].metrics.lastLatency / (1000.0)),
                     (float) (me->monitor[i].metrics.maxLatency / (1000.0)),
-                    (float) (me->monitor[i].metrics.WCET / (1000 * 1000.0)),
                     (uint32_t) (me->monitor[i].metrics.deadlineLostCount),
                     (uint32_t) (me->monitor[i].metrics.runtimeOverrunCount),
                     (uint32_t) (me->monitor[i].metrics.taskDepletedCount),
@@ -427,7 +427,7 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
         mvprintw(currentLine++, 0, "SCHED_FIFO TASKS:");
 
         // Imprimir cabeçalho
-        mvprintw(currentLine++, 0, "PID      PRI    WORKTIME(us)    MINTIME(us)     MAXTIME(us)");
+        mvprintw(currentLine++, 0, "PID      PRI    EXECTIME(ms)    MIN_ET(ms)  WCET(ms)");
 
         pthread_mutex_lock(&me->isTaskBeingTraced_mutex);
         for (ssize_t i = 0; i < MAX_TRACED_TASKS; i++) {
@@ -438,12 +438,12 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
                 }
 
                 // Printa dados das tarefas
-                mvprintw(currentLine++, 0, "%-8d %-6d %-15ld %-15ld %-14ld",
+                mvprintw(currentLine++, 0, "%-8d %-6d %-15.3f %-11.3f %-13.3f",
                     me->monitor[i].pid,
                     -1 - PID_getPriority(me->monitor[i].pid),
-                    me->monitor[i].metrics.lastET / 1000,
-                    me->monitor[i].metrics.minET / 1000,
-                    me->monitor[i].metrics.WCET / 1000
+                    (float) (me->monitor[i].metrics.lastET / (1000 * 1000.0)),
+                    (float) (me->monitor[i].metrics.minET / (1000 * 1000.0)),
+                    (float) (me->monitor[i].metrics.WCET / (1000 * 1000.0))
                     );
             }
         }
@@ -455,7 +455,7 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
         mvprintw(currentLine++, 0, "Other policys:");
 
         // Imprimir cabeçalho
-        mvprintw(currentLine++, 0, "PID      SCHEDTYPE       PRI    WORKTIME(us)    MINTIME(us)     MAXTIME(us)");
+        mvprintw(currentLine++, 0, "PID      SCHEDTYPE       PRI    EXECTIME(ms)    MIN_ET(ms)  WCET(ms)");
 
         pthread_mutex_lock(&me->isTaskBeingTraced_mutex);
         for (ssize_t i = 0; i < MAX_TRACED_TASKS; i++) {
@@ -470,13 +470,13 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
                 }
 
                 // Printa dados das tarefas
-                mvprintw(currentLine++, 0, "%-8d %-15s %-6d %-16ld %-14ld %-14ld",
+                mvprintw(currentLine++, 0, "%-8d %-15s %-6d %-15.3f %-11.3f %-13.3f",
                     me->monitor[i].pid,
                     schedulerPolicy,
                     PID_getPriority(me->monitor[i].pid),
-                    me->monitor[i].metrics.lastET / 1000,
-                    me->monitor[i].metrics.minET / 1000,
-                    me->monitor[i].metrics.WCET / 1000
+                    (float) (me->monitor[i].metrics.lastET / (1000 * 1000.0)),
+                    (float) (me->monitor[i].metrics.minET / (1000 * 1000.0)),
+                    (float) (me->monitor[i].metrics.WCET / (1000 * 1000.0))
                     );
             }
         }
