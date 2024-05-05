@@ -5,6 +5,24 @@
 #include <string.h>
 #include <sys/mman.h>   // mlockall
 
+
+static inline int TaskTrace_sendTelegram(TaskTrace *const me)
+{
+    // Read the actual time
+    if (clock_gettime(CLOCK_MONOTONIC_RAW, &me->telegram.timestamp) != 0) {
+        perror("Error reding actual time to generate timestamp");
+        return -1;
+    }
+
+    ssize_t ret = SharedMem_userWrite(&me->SharedMem, &me->telegram);
+
+    if (ret != sizeof(Telegram)) {
+        return -2;
+    }
+
+    return 0;
+}
+
 int TaskTrace_init(TaskTrace *const me)
 {
     // config stack em heap to stay always allocated and avoid page faults during operation
@@ -29,7 +47,7 @@ int TaskTrace_deinit(TaskTrace *const me)
     return -1;
 }
 
-int TaskTrace_startRecording(TaskTrace *const me)
+int TaskTrace_enableRecording(TaskTrace *const me)
 {
     if (me->isInitiallized == 0) {
         return -1;
@@ -44,7 +62,7 @@ int TaskTrace_startRecording(TaskTrace *const me)
     return 0;
 }
 
-int TaskTrace_stopRecording(TaskTrace *const me)
+int TaskTrace_disableRecording(TaskTrace *const me)
 {
     if (me->isInitiallized == 0) {
         return -1;
@@ -59,14 +77,26 @@ int TaskTrace_stopRecording(TaskTrace *const me)
     return 0;
 }
 
-int TaskTrace_traceWorkStart(TaskTrace *const me)
+int TaskTrace_traceDeadlineTaskStartPoint(TaskTrace *const me)
 {
     if (!me->isInitiallized || !me->isRecording) {
         return -1;
     }
 
     me->telegram.pid = me->pid;
-    me->telegram.code = TelegramCode_startWorkPoint;
+    me->telegram.code = TelegramCode_cyclicTaskFirstReady;
+
+    return TaskTrace_sendTelegram(me);
+}
+
+int TaskTrace_traceExecutionStart(TaskTrace *const me)
+{
+    if (!me->isInitiallized || !me->isRecording) {
+        return -1;
+    }
+
+    me->telegram.pid = me->pid;
+    me->telegram.code = TelegramCode_startExecutionTime;
 
     // Read the actual time
     if (clock_gettime(CLOCK_MONOTONIC_RAW, &me->telegram.timestamp) != 0) {
@@ -83,14 +113,14 @@ int TaskTrace_traceWorkStart(TaskTrace *const me)
     return 0;
 }
 
-int TaskTrace_traceWorkStop(TaskTrace *const me)
+int TaskTrace_traceExecutionStop(TaskTrace *const me)
 {
     if (!me->isInitiallized || !me->isRecording) {
         return -1;
     }
 
     me->telegram.pid = me->pid;
-    me->telegram.code = TelegramCode_stopWorkPoint;
+    me->telegram.code = TelegramCode_stopExecutionTime;
 
     // Read the actual time
     if (clock_gettime(CLOCK_MONOTONIC_RAW, &me->telegram.timestamp) != 0) {

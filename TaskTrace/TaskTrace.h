@@ -14,10 +14,12 @@ typedef struct {
 int TaskTrace_init(TaskTrace *const me);
 int TaskTrace_deinit(TaskTrace *const me);
 
-int TaskTrace_startRecording(TaskTrace *const me);
-int TaskTrace_stopRecording(TaskTrace *const me);
+int TaskTrace_enableRecording(TaskTrace *const me);
+int TaskTrace_disableRecording(TaskTrace *const me);
 
-int TaskTrace_traceWorkStart(TaskTrace *const me);
-int TaskTrace_traceWorkStop(TaskTrace *const me);
+int TaskTrace_traceDeadlineTaskStartPoint(TaskTrace *const me);
+
+int TaskTrace_traceExecutionStart(TaskTrace *const me);
+int TaskTrace_traceExecutionStop(TaskTrace *const me);
 
 #endif // __TASK_TRACE_H__
