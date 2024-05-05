@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "Process.h"
 
 #ifndef SCHED_DEADLINE
@@ -157,6 +158,25 @@ int PID_getPriority(pid_t pid)
     }
 
     return param.sched_priority;
+}
+
+int PID_getCpu(pid_t pid)
+{
+    //return sched_getcpu();
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+
+    if (sched_getaffinity(pid, sizeof(cpu_set_t), &cpuset) == -1) {
+        return -1;
+    }
+
+    for (int i = 0; i < CPU_SETSIZE; i++) {
+        if (CPU_ISSET(i, &cpuset)) {
+            return i;
+        }
+    }
+
+    return -2;
 }
 
 /**
