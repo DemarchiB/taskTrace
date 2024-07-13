@@ -241,7 +241,9 @@ static void *Monitor_task(void *arg)
         switch (me->telegram.code)
         {
         case TelegramCode_cyclicTaskFirstReady:
-            me->metrics.lastCyclicTaskReadyTime = (me->telegram.timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram.timestamp.tv_nsec);
+            if (me->metrics.lastCyclicTaskReadyTime == 0) {
+                me->metrics.lastCyclicTaskReadyTime = (me->telegram.timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram.timestamp.tv_nsec);
+            }
             break;
         case TelegramCode_startExecutionTime:
             me->metrics.lastStartExecutionTime = (me->telegram.timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram.timestamp.tv_nsec);
@@ -284,7 +286,8 @@ static void *Monitor_task(void *arg)
 
                     // Autoajust the ready tick in case the first tick was not 100% correct
                     if (me->metrics.lastStartExecutionTime < me->metrics.lastCyclicTaskReadyTime) {
-                        me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartExecutionTime;
+                        //me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartExecutionTime;
+                        me->metrics.lastStartExecutionTime = me->metrics.lastCyclicTaskReadyTime;
                     }
 
                     // Calculate latency
@@ -295,17 +298,14 @@ static void *Monitor_task(void *arg)
                     } else if (me->metrics.lastLatency < me->metrics.minLatency) {
                         me->metrics.minLatency = me->metrics.lastLatency;
                     }
-                    
-                    // Update next tick where the task will be ready
-                    // Here I have a while cause there could have happend some runtime overflows
-                    while(me->metrics.lastCyclicTaskReadyTime < me->metrics.lastStopExecutionTime) {
-                        me->metrics.lastCyclicTaskReadyTime += period;
-                    }
 
                     // Check for deadline lost
-                    if (me->metrics.lastET + me->metrics.lastLatency > deadline) {
+                    if ((me->metrics.lastStopExecutionTime - me->metrics.lastCyclicTaskReadyTime) > deadline) {
                         me->metrics.deadlineLostCount++;
                     }
+                    // if (me->metrics.lastET + me->metrics.lastLatency > deadline) {
+                    //     me->metrics.deadlineLostCount++;
+                    // }
 
                     // Check for task runtime overruns
                     if (me->metrics.lastET > runtime) {
@@ -315,6 +315,12 @@ static void *Monitor_task(void *arg)
                         if (me->metrics.lastET > period) {
                             me->metrics.taskDepletedCount++;
                         }
+                    }
+                    
+                    // Update next tick where the task will be ready
+                    // Here I have a while cause there could have happend some runtime overflows
+                    while(me->metrics.lastCyclicTaskReadyTime < me->metrics.lastStopExecutionTime) {
+                        me->metrics.lastCyclicTaskReadyTime += period;
                     }
                 }
             } while(0);

@@ -5,8 +5,8 @@
 #include <pthread.h>
 #include <unistd.h> // getpid
 
-#define NUM_DEADLINE_THREADS 5
-#define NUM_FIFO_THREADS 1
+#define NUM_DEADLINE_THREADS 4
+#define NUM_FIFO_THREADS 0
 #define NUM_THREADS NUM_DEADLINE_THREADS + NUM_FIFO_THREADS
 
 void *user_deadline_task(void *arg)
@@ -28,7 +28,7 @@ void *user_deadline_task(void *arg)
     }
 
     uint64_t runtimeInNs = 5 * 1000 * 1000;   // reserved runtime
-    uint64_t deadlineInNs = 10 * 1000 * 1000;  // deadline
+    uint64_t deadlineInNs = 5 * 1000 * 1000;  // deadline
     uint64_t periodInNs = 15 * 1000 * 1000;   // period
 
     // const uint64_t workTime = (uint64_t) pid * 100;
