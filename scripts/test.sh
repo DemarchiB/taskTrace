@@ -16,6 +16,9 @@ sleep 1
 echo "Test script: Executando processo de simulação de tarefas do usuário"
 ./userTest/userTest &
 
+# sleep 1
+# ./scripts/cpuset.sh &
+
 echo "Test script: Pressione qualquer tecla para encerrar os testes"
 read -n 1 -s -r -p ""
 echo
