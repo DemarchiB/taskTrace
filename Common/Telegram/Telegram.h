@@ -10,17 +10,18 @@
 
 typedef enum {
     TelegramCode_cyclicTaskFirstReady,
-    TelegramCode_startExecutionTime,
-    TelegramCode_stopExecutionTime,
+    TelegramCode_startAndStopTime,
     TelegramCode_perfMark1Start = TELEGRAM_PERFMARK_OFFSET,
     TelegramCode_perfMark1End,
     NumberOfTelegramCodes,
 } TelegramCode;
 
+
 typedef struct {
     pid_t pid;  // Is it really necessary since we have a buffer for each pid? I'll let it here for now
     TelegramCode code;
-    struct timespec timestamp;
+    uint64_t t1;
+    uint64_t t2;
 } Telegram;
 
 #endif // __TASK_TRACE_TELEGRAM_H__

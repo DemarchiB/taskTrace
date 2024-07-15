@@ -242,14 +242,12 @@ static void *Monitor_task(void *arg)
         {
         case TelegramCode_cyclicTaskFirstReady:
             if (me->metrics.lastCyclicTaskReadyTime == 0) {
-                me->metrics.lastCyclicTaskReadyTime = (me->telegram.timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram.timestamp.tv_nsec);
+                me->metrics.lastCyclicTaskReadyTime = me->telegram.t1;
             }
             break;
-        case TelegramCode_startExecutionTime:
-            me->metrics.lastStartExecutionTime = (me->telegram.timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram.timestamp.tv_nsec);
-            break;
-        case TelegramCode_stopExecutionTime:
-            me->metrics.lastStopExecutionTime = (me->telegram.timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram.timestamp.tv_nsec);
+        case TelegramCode_startAndStopTime:
+            me->metrics.lastStartExecutionTime = me->telegram.t1;
+            me->metrics.lastStopExecutionTime = me->telegram.t2;
 
             // Calculate the execution time
             me->metrics.lastET = me->metrics.lastStopExecutionTime - me->metrics.lastStartExecutionTime;
@@ -327,14 +325,13 @@ static void *Monitor_task(void *arg)
 
             break;
         case TelegramCode_perfMark1Start:
-            me->metrics.perfMarkStart[TelegramCode_perfMark1Start - TELEGRAM_PERFMARK_OFFSET] = 
-                (me->telegram.timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram.timestamp.tv_nsec);
+            me->metrics.perfMarkStart[TelegramCode_perfMark1Start - TELEGRAM_PERFMARK_OFFSET] = me->telegram.t1;
             break;
         case TelegramCode_perfMark1End:
-            me->metrics.perfMarkStop[TelegramCode_perfMark1End - TELEGRAM_PERFMARK_OFFSET] = 
-                (me->telegram.timestamp.tv_sec * 1000 * 1000 * 1000) + (me->telegram.timestamp.tv_nsec);
+            me->metrics.perfMarkStop[TelegramCode_perfMark1End - TELEGRAM_PERFMARK_OFFSET] = me->telegram.t1;
             me->metrics.perfMartTotalTime[TelegramCode_perfMark1End - TELEGRAM_PERFMARK_OFFSET - 1] = 
-                me->metrics.perfMarkStop[TelegramCode_perfMark1End - TELEGRAM_PERFMARK_OFFSET - 1] - me->metrics.perfMarkStart[0];
+                me->metrics.perfMarkStop[TelegramCode_perfMark1End - TELEGRAM_PERFMARK_OFFSET - 1] - 
+                me->metrics.perfMarkStart[TelegramCode_perfMark1End - TELEGRAM_PERFMARK_OFFSET - 1];
             // printf("Monitor %d: performance mark %d work time = %ld ns\n", me->pid, TelegramCode_perfMark1Start - TELEGRAM_PERFMARK_OFFSET + 1, me->metrics.lastExecutionTime);
             break;
         default:

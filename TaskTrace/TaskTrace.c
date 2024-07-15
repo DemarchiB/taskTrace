@@ -5,19 +5,11 @@
 #include <string.h>
 #include <sys/mman.h>   // mlockall
 
-
-static inline int TaskTrace_sendTelegram(TaskTrace *const me)
+static inline int TaskTrace_readTimestamp(struct timespec *timestamp)
 {
-    // Read the actual time
-    if (clock_gettime(CLOCK_MONOTONIC_RAW, &me->telegram.timestamp) != 0) {
-        perror("Error reding actual time to generate timestamp");
+    if (clock_gettime(CLOCK_MONOTONIC_RAW, timestamp) != 0) {
+        // perror("Error reding actual time to generate timestamp");
         return -1;
-    }
-
-    ssize_t ret = SharedMem_userWrite(&me->SharedMem, &me->telegram);
-
-    if (ret != sizeof(Telegram)) {
-        return -2;
     }
 
     return 0;
@@ -86,7 +78,20 @@ int TaskTrace_traceDeadlineTaskStartPoint(TaskTrace *const me)
     me->telegram.pid = me->pid;
     me->telegram.code = TelegramCode_cyclicTaskFirstReady;
 
-    return TaskTrace_sendTelegram(me);
+    // Read the actual time
+    if (TaskTrace_readTimestamp(&me->tmpTime)) {
+        return -2;
+    }
+    
+    me->telegram.t1 = (me->tmpTime.tv_sec * 1000 * 1000 * 1000) + (me->tmpTime.tv_nsec);
+
+    ssize_t ret = SharedMem_userWrite(&me->SharedMem, &me->telegram);
+
+    if (ret != sizeof(Telegram)) {
+        return -3;
+    }
+
+    return 0;
 }
 
 int TaskTrace_traceExecutionStart(TaskTrace *const me)
@@ -94,21 +99,13 @@ int TaskTrace_traceExecutionStart(TaskTrace *const me)
     if (!me->isInitiallized || !me->isRecording) {
         return -1;
     }
-
-    me->telegram.pid = me->pid;
-    me->telegram.code = TelegramCode_startExecutionTime;
-
+    
     // Read the actual time
-    if (clock_gettime(CLOCK_MONOTONIC_RAW, &me->telegram.timestamp) != 0) {
-        perror("Error reding actual time to generate timestamp");
-        return -1;
-    }
-
-    ssize_t ret = SharedMem_userWrite(&me->SharedMem, &me->telegram);
-
-    if (ret != sizeof(Telegram)) {
+    if (TaskTrace_readTimestamp(&me->tmpTime)) {
         return -2;
     }
+    
+    me->telegram.t1 = (me->tmpTime.tv_sec * 1000 * 1000 * 1000) + (me->tmpTime.tv_nsec);
 
     return 0;
 }
@@ -120,18 +117,19 @@ int TaskTrace_traceExecutionStop(TaskTrace *const me)
     }
 
     me->telegram.pid = me->pid;
-    me->telegram.code = TelegramCode_stopExecutionTime;
+    me->telegram.code = TelegramCode_startAndStopTime;
 
     // Read the actual time
-    if (clock_gettime(CLOCK_MONOTONIC_RAW, &me->telegram.timestamp) != 0) {
-        perror("Error reding actual time to generate timestamp");
-        return -1;
+    if (TaskTrace_readTimestamp(&me->tmpTime)) {
+        return -2;
     }
+    
+    me->telegram.t2 = (me->tmpTime.tv_sec * 1000 * 1000 * 1000) + (me->tmpTime.tv_nsec);
 
     ssize_t ret = SharedMem_userWrite(&me->SharedMem, &me->telegram);
 
     if (ret != sizeof(Telegram)) {
-        return -2;
+        return -3;
     }
 
     return 0;

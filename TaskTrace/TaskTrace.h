@@ -9,6 +9,8 @@ typedef struct {
     pid_t pid;
     SharedMem SharedMem;
     Telegram telegram;  // Used as txBuffer.
+
+    struct timespec tmpTime;    // tmp value, not in stack to avoid page fault
 } TaskTrace;
 
 int TaskTrace_init(TaskTrace *const me);
