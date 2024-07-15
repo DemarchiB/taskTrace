@@ -283,10 +283,10 @@ static void *Monitor_task(void *arg)
                     }
 
                     // Autoajust the ready tick in case the first tick was not 100% correct
-                    if (me->metrics.lastStartExecutionTime < me->metrics.lastCyclicTaskReadyTime) {
-                        //me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartExecutionTime;
-                        me->metrics.lastStartExecutionTime = me->metrics.lastCyclicTaskReadyTime;
-                    }
+                    // if (me->metrics.lastStartExecutionTime < me->metrics.lastCyclicTaskReadyTime) {
+                    //     //me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartExecutionTime;
+                    //     me->metrics.lastStartExecutionTime = me->metrics.lastCyclicTaskReadyTime;
+                    // }
 
                     // Calculate latency
                     me->metrics.lastLatency = (int64_t) me->metrics.lastStartExecutionTime - me->metrics.lastCyclicTaskReadyTime;
@@ -389,7 +389,7 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
 
         // 1º Mostra tarefas do tipo deadline
         mvprintw(currentLine++, 0, "SCHED_DEADLINE TASKS:");
-        mvprintw(currentLine++, 0, "PID      PRI    EXECTIME(ms)    WCET(ms)    Latency(us)   maxLat(us)  dlLosts  rtOverrun  depleted   RUNTIME(ms)    DEADLINE(ms)    PERIOD(ms)    RUN_USAGE%%    PROC_USAGE%%");
+        mvprintw(currentLine++, 0, "PID      PRI    EXECTIME(ms)    WCET(ms)    Latency(us)   minLat(us)  maxLat(us)  dlLosts  rtOverrun  depleted   RUNTIME(ms)    DEADLINE(ms)    PERIOD(ms)    RUN%%    PROC%%");
 
         pthread_mutex_lock(&me->isTaskBeingTraced_mutex);
         for (ssize_t i = 0; i < MAX_TRACED_TASKS; i++) {
@@ -406,12 +406,13 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
                 }
 
                 // Printa dados das tarefas
-                mvprintw(currentLine++, 0, "%-8d %-6s %-15.3f %-11.3f %-13.1f %-11.1f %-8d %-10d %-10d %-14.3f %-15.3f %-13.3f %-13.1f %-3.1f",
+                mvprintw(currentLine++, 0, "%-8d %-6s %-15.3f %-11.3f %-13.1f %-11.1f %-11.1f %-8d %-10d %-10d %-14.3f %-15.3f %-13.3f %-8.1f %-3.1f",
                     me->monitor[i].pid,
                     "rt",
                     (float) (me->monitor[i].metrics.lastET / (1000 * 1000.0)),
                     (float) (me->monitor[i].metrics.WCET / (1000 * 1000.0)),
                     (float) (me->monitor[i].metrics.lastLatency / (1000.0)),
+                    (float) (me->monitor[i].metrics.minLatency / (1000.0)),
                     (float) (me->monitor[i].metrics.maxLatency / (1000.0)),
                     (uint32_t) (me->monitor[i].metrics.deadlineLostCount),
                     (uint32_t) (me->monitor[i].metrics.runtimeOverrunCount),
