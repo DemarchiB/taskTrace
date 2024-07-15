@@ -291,7 +291,7 @@ static void *Monitor_task(void *arg)
                     }
 
                     // Calculate latency
-                    me->metrics.lastLatency = me->metrics.lastStartExecutionTime - me->metrics.lastCyclicTaskReadyTime;
+                    me->metrics.lastLatency = (int64_t) me->metrics.lastStartExecutionTime - me->metrics.lastCyclicTaskReadyTime;
 
                     if (me->metrics.lastLatency > me->metrics.maxLatency) {
                         me->metrics.maxLatency = me->metrics.lastLatency;
