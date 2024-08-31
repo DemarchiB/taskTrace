@@ -10,6 +10,7 @@ fi
 echo "Cria o cpuset para tarefas do tipo deadline"
 if ! mountpoint -q "/sys/fs/cgroup/cpuset"; then
     echo "O cpuset não está montado. Montando..."
+    mkdir /sys/fs/cgroup/cpuset
     mount -t cpuset cpuset /sys/fs/cgroup/cpuset
 else
     echo "O cpuset já está montado."
@@ -25,26 +26,23 @@ else
 fi
 
 echo "Atualizando propriedades do cpuset deadline"
-echo 0 > deadline/cpuset.cpus
-echo 0 > deadline/cpuset.mems
-echo 1 > cpuset.cpu_exclusive
-echo 0 > cpuset.sched_load_balance
+echo 3-5 > deadline/cpus
+echo 0 > deadline/mems
+echo 1 > cpu_exclusive
+echo 0 > sched_load_balance
 
 
-file="deadline/cpuset.cpu_exclusive"
+file="deadline/cpu_exclusive"
 current_value=$(cat "$file")
 if [ "$current_value" != "1" ]; then
     echo 1 > "$file"
 fi
 
-# file="deadline/cpuset.mem_exclusive"
+# file="deadline/mem_exclusive"
 # current_value=$(cat "$file")
 # if [ "$current_value" != "1" ]; then
 #     echo 1 > "$file"
 # fi
-
-#echo 1 > deadline/cpuset.cpu_exclusive
-#echo 1 > deadline/cpuset.mem_exclusive
 
 echo "Aloca todas as tarefas deadline no cpuset"
 process_name="userTest"
