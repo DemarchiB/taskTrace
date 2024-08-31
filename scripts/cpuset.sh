@@ -29,13 +29,20 @@ echo "Atualizando propriedades do cpuset deadline"
 echo 3-5 > deadline/cpus
 echo 0 > deadline/mems
 echo 1 > cpu_exclusive
-echo 0 > sched_load_balance
+#echo 0 > sched_load_balance  # removido pois estáva bloqueando a crianção de novas tarefas do tipo deadline.
 
 
 file="deadline/cpu_exclusive"
 current_value=$(cat "$file")
 if [ "$current_value" != "1" ]; then
     echo 1 > "$file"
+fi
+
+
+file="deadline/sched_load_balance"
+current_value=$(cat "$file")
+if [ "$current_value" != "0" ]; then
+    echo 0 > "$file"
 fi
 
 # file="deadline/mem_exclusive"
