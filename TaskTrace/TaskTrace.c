@@ -69,31 +69,6 @@ int TaskTrace_disableRecording(TaskTrace *const me)
     return 0;
 }
 
-int TaskTrace_traceDeadlineTaskStartPoint(TaskTrace *const me)
-{
-    if (!me->isInitiallized || !me->isRecording) {
-        return -1;
-    }
-
-    me->telegram.pid = me->pid;
-    me->telegram.code = TelegramCode_cyclicTaskFirstReady;
-
-    // Read the actual time
-    if (TaskTrace_readTimestamp(&me->tmpTime)) {
-        return -2;
-    }
-    
-    me->telegram.t1 = (me->tmpTime.tv_sec * 1000 * 1000 * 1000) + (me->tmpTime.tv_nsec);
-
-    ssize_t ret = SharedMem_userWrite(&me->SharedMem, &me->telegram);
-
-    if (ret != sizeof(Telegram)) {
-        return -3;
-    }
-
-    return 0;
-}
-
 int TaskTrace_traceExecutionStart(TaskTrace *const me)
 {
     if (!me->isInitiallized || !me->isRecording) {

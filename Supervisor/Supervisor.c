@@ -240,11 +240,6 @@ static void *Monitor_task(void *arg)
 
         switch (me->telegram.code)
         {
-        case TelegramCode_cyclicTaskFirstReady:
-            if (me->metrics.lastCyclicTaskReadyTime == 0) {
-                me->metrics.lastCyclicTaskReadyTime = me->telegram.t1;
-            }
-            break;
         case TelegramCode_startAndStopTime:
             me->metrics.lastStartExecutionTime = me->telegram.t1;
             me->metrics.lastStopExecutionTime = me->telegram.t2;

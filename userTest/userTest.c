@@ -5,7 +5,7 @@
 #include <pthread.h>
 #include <unistd.h> // getpid
 
-#define NUM_DEADLINE_THREADS 4
+#define NUM_DEADLINE_THREADS 3
 #define NUM_FIFO_THREADS 0
 #define NUM_THREADS NUM_DEADLINE_THREADS + NUM_FIFO_THREADS
 
@@ -39,8 +39,6 @@ void *user_deadline_task(void *arg)
         perror("");
         return NULL;
     }
-    TaskTrace_traceDeadlineTaskStartPoint(&taskTrace);
-
 
     while(1) {
         struct timespec t_ini, t_cur;
