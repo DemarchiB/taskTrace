@@ -7,6 +7,15 @@
         "sharedmem.h": "c",
         "limits": "c",
         "process.h": "c",
-        "supervisor.h": "c"
+        "supervisor.h": "c",
+        "string.h": "c",
+        "dirent.h": "c",
+        "stdio.h": "c",
+        "data.h": "c",
+        "stdint.h": "c",
+        "list.h": "c",
+        "log.h": "c",
+        "stdbool.h": "c",
+        "monitormetrics.h": "c"
     }
 }

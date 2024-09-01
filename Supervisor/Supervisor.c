@@ -10,10 +10,6 @@
 
 #include <ncurses.h>    //  Interface
 
-#ifndef SCHED_DEADLINE
-#define SCHED_DEADLINE  6
-#endif
-
 static int Supervisor_init(Supervisor *const me, const UserInputs *const userInputs);
 static pid_t Supervisor_checkNewTaskToTrace(Supervisor *const me);
 static int Supervisor_reserveInstance(Supervisor *const me);
@@ -21,10 +17,6 @@ static int Supervisor_freeInstance(Supervisor *const me, int instanceNumber);
 static int Supervisor_checkIfTaskIsBeingTraced(Supervisor *const me, pid_t pid);
 static void *Supervisor_interfaceUpdateTask(void *arg);
 static void *Supervisor_checkAndCleanUnusedSharedMemThread(void *arg);
-
-static void Monitor_init(MonitorThread *const me);
-static void Monitor_initMetrics(MonitorThread *const me);
-static void *Monitor_task(void *arg);
 
 static int UserInputs_read(UserInputs *const me, int argc, char *argv[]);
 
@@ -72,9 +64,10 @@ int main(int argc, char *argv[])
         while ((instanceNumber = Supervisor_reserveInstance(&supervisor)) < 0) {
             usleep(500000);
         }
-       // printf("Supervisor: Free instance %d found\n", instanceNumber);
+        // printf("Supervisor: Free instance %d found\n", instanceNumber);
 
         supervisor.monitor[instanceNumber].pid = pid;
+        supervisor.monitor[instanceNumber].enableLogging = supervisor.userInputs.enableLogging;
 
         //printf("Supervisor: Creating a thread to monitor the user process %d\n", pid);
         if (pthread_create(&supervisor.monitor[instanceNumber].id, 
@@ -117,7 +110,7 @@ static pid_t Supervisor_checkNewTaskToTrace(Supervisor *const me)
 
     do {
         struct dirent *entry;
-        usleep(50000);  //50ms
+        usleep(500000);  //500ms
         rewinddir(dir);
 
         // Check if there is any new region created by some task that wants to be traced
@@ -188,161 +181,6 @@ static void *Supervisor_checkAndCleanUnusedSharedMemThread(void *arg)
     pthread_exit(NULL);
 }
 
-static void Monitor_init(MonitorThread *const me)
-{
-    me->policy = PID_getSchedulerPolicy(me->pid, NULL);
-
-    Monitor_initMetrics(me);
-}
-
-static void Monitor_initMetrics(MonitorThread *const me)
-{
-    memset(&me->metrics, 0, sizeof(MonitorMetrics));
-
-    me->metrics.minLatency = (uint64_t) -1;
-    me->metrics.minET = (uint64_t) -1;
-}
-
-/**
- * @brief Each instance of this task is responsible for monitoring one user process.
- * 
- * @param arg Pointer to the sharedMem to monitor.
- * @return void* 
- */
-static void *Monitor_task(void *arg)
-{
-    MonitorThread *const me = arg;
-    
-    printf("Supervisor: Monitor task for pid %d created\n", me->pid);
-    
-    SharedMem_supervisorInit(&me->sharedMem, me->pid);
-
-    Monitor_init(me);
-
-    while(1) {
-        ssize_t numberOfBytesReceived = SharedMem_supervisorRead(&me->sharedMem, &me->telegram);
-
-        if (numberOfBytesReceived != sizeof(Telegram)) {
-            if (numberOfBytesReceived == 0) {
-                if (PID_checkIfExist(me->pid != 1)) {
-                    // User task was closed
-                    pthread_exit(NULL);
-                }
-            }
-            printf("Monitor %d: invalid telegram, received %ld bytes (should be %ld)\n", me->pid, numberOfBytesReceived, sizeof(Telegram));
-            continue;
-        }
-
-        if (me->pid != me->telegram.pid) {
-            printf("Monitor %d: invalid telegram, pid %d received (should be %d)\n", me->pid, me->telegram.pid, me->pid);
-            continue;
-        }
-
-        switch (me->telegram.code)
-        {
-        case TelegramCode_startAndStopTime:
-            me->metrics.lastStartExecutionTime = me->telegram.t1;
-            me->metrics.lastStopExecutionTime = me->telegram.t2;
-
-            // Calculate the execution time
-            me->metrics.lastET = me->metrics.lastStopExecutionTime - me->metrics.lastStartExecutionTime;
-
-            // Calculate the maximum and minimum execution time values
-            if (me->metrics.lastET > me->metrics.WCET) {
-                me->metrics.WCET = me->metrics.lastET;
-            } else if (me->metrics.lastET < me->metrics.minET) {
-                me->metrics.minET = me->metrics.lastET;
-            }
-
-            do {
-                if (me->policy == SCHED_DEADLINE) {
-                    // Read task deadline parameters
-                    uint64_t runtime, period, deadline;
-                    if (PID_getDeadlinePropeties(me->pid, &runtime, &deadline, &period) != 0) {
-                        me->policy = PID_getSchedulerPolicy(me->pid, NULL);
-                        if (me->policy != SCHED_DEADLINE) {
-                            printf("Monitor %d: Error, not able to read deadline properties cause user changed the policy to %d\n", me->pid, me->policy);
-                        } else {
-                            printf("Monitor %d: Error, not able to read deadline properties\n", me->pid);
-                        }
-                        break;
-                    }
-
-                    /*
-                        Calculate latency if user provided the first trace tick
-                        If user didn't call the trace for DeadlineTaskStartPoint, then I try to estimate using the trace point of the start exect time.
-                        This might work we cause I also have a autoadjust, that will stay tuning this value forever.
-                    */
-                    if (me->metrics.lastCyclicTaskReadyTime == 0) {
-                        me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartExecutionTime;
-                    }
-
-                    // Autoajust the ready tick in case the first tick was not 100% correct
-                    // if (me->metrics.lastStartExecutionTime < me->metrics.lastCyclicTaskReadyTime) {
-                    //     //me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartExecutionTime;
-                    //     me->metrics.lastStartExecutionTime = me->metrics.lastCyclicTaskReadyTime;
-                    // }
-
-                    // Calculate latency
-                    me->metrics.lastLatency = (int64_t) me->metrics.lastStartExecutionTime - me->metrics.lastCyclicTaskReadyTime;
-
-                    if (me->metrics.lastLatency > me->metrics.maxLatency) {
-                        me->metrics.maxLatency = me->metrics.lastLatency;
-                    } else if (me->metrics.lastLatency < me->metrics.minLatency) {
-                        me->metrics.minLatency = me->metrics.lastLatency;
-                    }
-
-                    // Check for deadline lost
-                    if ((me->metrics.lastStopExecutionTime - me->metrics.lastCyclicTaskReadyTime) > deadline) {
-                        me->metrics.deadlineLostCount++;
-                    }
-                    // if (me->metrics.lastET + me->metrics.lastLatency > deadline) {
-                    //     me->metrics.deadlineLostCount++;
-                    // }
-
-                    // Check for task runtime overruns
-                    if (me->metrics.lastET > runtime) {
-                        me->metrics.runtimeOverrunCount++;
-
-                        // Check for task "throttled" or "depleted" in case of overruns
-                        if (me->metrics.lastET > period) {
-                            me->metrics.taskDepletedCount++;
-                        }
-                    }
-                    
-                    // Update next tick where the task will be ready
-                    // Here I have a while cause there could have happend some runtime overflows
-                    while(me->metrics.lastCyclicTaskReadyTime < me->metrics.lastStopExecutionTime) {
-                        me->metrics.lastCyclicTaskReadyTime += period;
-                    }
-                }
-            } while(0);
-
-            break;
-        case TelegramCode_perfMark1Start:
-            me->metrics.perfMarkStart[TelegramCode_perfMark1Start - TELEGRAM_PERFMARK_OFFSET] = me->telegram.t1;
-            break;
-        case TelegramCode_perfMark1End:
-            me->metrics.perfMarkStop[TelegramCode_perfMark1End - TELEGRAM_PERFMARK_OFFSET] = me->telegram.t1;
-            me->metrics.perfMartTotalTime[TelegramCode_perfMark1End - TELEGRAM_PERFMARK_OFFSET - 1] = 
-                me->metrics.perfMarkStop[TelegramCode_perfMark1End - TELEGRAM_PERFMARK_OFFSET - 1] - 
-                me->metrics.perfMarkStart[TelegramCode_perfMark1End - TELEGRAM_PERFMARK_OFFSET - 1];
-            // printf("Monitor %d: performance mark %d work time = %ld ns\n", me->pid, TelegramCode_perfMark1Start - TELEGRAM_PERFMARK_OFFSET + 1, me->metrics.lastExecutionTime);
-            break;
-        default:
-            // printf("Monitor %d: Error, invalid code (%d) received\n", me->pid, me->telegram.code);
-            break;
-        }
-
-        // printf("Monitor %d: Telegram received successfully: \n", me->pid);
-        // printf("       pid:      %d\n", me->telegram[0].pid);
-        // printf("       code:     %d\n", me->telegram[0].code);
-        // printf("       time(ns): %ld\n", me->lastStartExecutionTime);
-    }
-
-    pthread_exit(NULL);
-}
-
 static void *Supervisor_interfaceUpdateTask(void *arg)
 {
     Supervisor *const me = arg;
@@ -373,13 +211,10 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
         clear(); // Limpar a tela
 
         currentLine = 0;
-        mvprintw(currentLine++, 0, "%-20s %-1s %-1ld %-10s %-1s %-1d",
+        mvprintw(currentLine++, 0, "%-20s %-1s %-1d",
             "User inputs->",
-            "sys_latency:",
-            me->userInputs.systemLatency,
-            "us",
-            "autotune:",
-            me->userInputs.autotune.isEnabled
+            "logging:",
+            me->userInputs.enableLogging
             );
 
         // 1º Mostra tarefas do tipo deadline
@@ -560,65 +395,38 @@ static int UserInputs_read(UserInputs *const me, int argc, char *argv[])
 {
     memset(me, 0, sizeof(UserInputs));
 
-    int sys_latency_received = 0;
-
     if (argc < 2) {
-        printf("Supervisor: Error, user must pass at least the sys_latency value.\n");
-        printf("Usage: sudo Supervisor --sys_latency 500\n");
-        printf("   or: sudo Supervisor --sys_latency 500 --autotune on\n");
-        printf("Obs: The latency must be in microseconds (us)\n");
+        printf("Supervisor: Error, user must pass at least the log configuration.\n");
+        printf("Usage: sudo Supervisor --log on\n");
+        printf("   or: sudo Supervisor --log off\n");
         return -1;
     }
 
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--sys_latency") == 0) {
-            // Check if there is a value after "--sys_latency"
-            if (i + 1 < argc) {
-                // Convert the value to systemLatency
-                me->systemLatency = atoi(argv[i + 1]);
-                i++; // jump to the next argument.
-                sys_latency_received = 1;
-            } else {
-                printf("Supervisor: missing value for \"--sys_latency\"\n");
-                return -1;
-            }
-        }
-        else if (strcmp(argv[i], "--autotune") == 0) {
-            // Check if there is a value after "--autotune"
+        if (strcmp(argv[i], "--log") == 0) {
+            // Check if there is a value after "--log"
             if (i + 1 < argc) {
                 if (strcmp(argv[i + 1], "on") == 0) {
-                    me->autotune.isEnabled = 1;
+                    me->enableLogging = 1;
                 } else if (strcmp(argv[i + 1], "off") == 0) {
-                    me->autotune.isEnabled = 0;
+                    me->enableLogging = 0;
                 } else {
-                    printf("Supervisor: Invalid value for \"--autotune\"\n");
+                    printf("Supervisor: Invalid value for \"--log\"\n");
                     printf("Supervisor: Valid values \"on\" and \"off\"\n");
                     return -2;
                 }
                 i++; // jump to the next argument.
             } else {
-                printf("Supervisor: missing value for \"--autotune\"\n");
+                printf("Supervisor: missing value for \"--log\"\n");
                 return -2;
             }
         }
         else if ((strcmp(argv[i], "-h") == 0) || (strcmp(argv[i], "--help") == 0)) {
-            printf("Usage: sudo Supervisor --sys_latency 500\n");
-            printf("   or: sudo Supervisor --sys_latency 500 --autotune on\n");
-            printf("   or: sudo Supervisor --sys_latency 500 --autotune off\n");
-            printf("The system maximum latency (in us) is a mandatory argument\n");
-            printf("You should get this value using other tools, like RTLA.\n");
-            return -3; // Return error just to avoid the supervisor to move on
+            printf("Usage: sudo Supervisor --log on\n");
+            printf("   or: sudo Supervisor --log off\n");
+            return -4; // Return error just to avoid the supervisor to move on
         }
     }
-
-    if (sys_latency_received == 0) {
-        printf("Supervisor: Error, user must pass at least the sys_latency value.\n");
-        printf("Usage: sudo Supervisor --sys_latency 500\n");
-        printf("   or: sudo Supervisor --sys_latency 500 --autotune on\n");
-        printf("Obs: The latency must be in microseconds (us)\n");
-        return -1;
-    }
-
 
     return 0;
 }
