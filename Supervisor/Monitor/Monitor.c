@@ -98,10 +98,9 @@ void *Monitor_task(void *arg)
                     }
 
                     // Autoajust the ready tick in case the first tick was not 100% correct
-                    // if (me->metrics.lastStartExecutionTime < me->metrics.lastCyclicTaskReadyTime) {
-                    //     //me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartExecutionTime;
-                    //     me->metrics.lastStartExecutionTime = me->metrics.lastCyclicTaskReadyTime;
-                    // }
+                    if (me->metrics.lastStartExecutionTime < me->metrics.lastCyclicTaskReadyTime) {
+                        me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartExecutionTime;
+                    }
 
                     // Calculate latency
                     me->metrics.lastLatency = (int64_t) me->metrics.lastStartExecutionTime - me->metrics.lastCyclicTaskReadyTime;
