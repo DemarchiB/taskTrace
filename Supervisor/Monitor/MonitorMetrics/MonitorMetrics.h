@@ -15,12 +15,12 @@ typedef struct {
     uint32_t taskDepletedCount;     // Count the amount of time the task overrun its runtime and was "throttled" or "depleted"
     uint64_t cycleCount;   // How many periods have elapsed
 
-    uint64_t lastStartExecutionTime; // Used to save the time of when user task started its work
-    uint64_t lastStopExecutionTime;  // Used to save the time of when user task finished its work
+    uint64_t lastStartRunTime; // Used to save the time of when user task started its work
+    uint64_t lastStopRunTime;  // Used to save the time of when user task finished its work
     
-    uint64_t lastET;            // Execution time
-    uint64_t minET;   // The minimum Execution time
-    uint64_t WCET;          // Worst Case Execution Time    (maximum execution time)
+    uint64_t lastRT;        // Response Time
+    uint64_t minRT;         // The minimum Response time
+    uint64_t WCRT;          // Worst Case Response Time    (maximum Response time)
 
     uint64_t perfMarkStart[MAX_NUMBER_OF_PERFORMANCE_MARKERS];
     uint64_t perfMarkStop[MAX_NUMBER_OF_PERFORMANCE_MARKERS];

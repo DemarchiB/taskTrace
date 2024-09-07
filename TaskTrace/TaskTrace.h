@@ -19,8 +19,6 @@ int TaskTrace_deinit(TaskTrace *const me);
 int TaskTrace_enableRecording(TaskTrace *const me);
 int TaskTrace_disableRecording(TaskTrace *const me);
 
-int TaskTrace_traceDeadlineTaskStartPoint(TaskTrace *const me);
-
 int TaskTrace_traceExecutionStart(TaskTrace *const me);
 int TaskTrace_traceExecutionStop(TaskTrace *const me);
 

@@ -24,11 +24,11 @@ void Data_fillMonitorMetricsData(Data *const me, const MonitorMetrics* const mon
     me->monitorMetrics.runtimeOverrunCount = monitorMetrics->runtimeOverrunCount;
     me->monitorMetrics.taskDepletedCount = monitorMetrics->taskDepletedCount;
     me->monitorMetrics.cycleCount = monitorMetrics->cycleCount;
-    me->monitorMetrics.lastStartExecutionTime = monitorMetrics->lastStartExecutionTime / (1000.0);
-    me->monitorMetrics.lastStopExecutionTime = monitorMetrics->lastStopExecutionTime / (1000.0);
-    me->monitorMetrics.lastET = monitorMetrics->lastET / (1000.0);
-    me->monitorMetrics.minET = monitorMetrics->minET / (1000.0);
-    me->monitorMetrics.WCET = monitorMetrics->WCET / (1000.0);
+    me->monitorMetrics.lastStartRunTime = monitorMetrics->lastStartRunTime / (1000.0);
+    me->monitorMetrics.lastStopRunTime = monitorMetrics->lastStopRunTime / (1000.0);
+    me->monitorMetrics.lastRT = monitorMetrics->lastRT / (1000.0);
+    me->monitorMetrics.minRT = monitorMetrics->minRT / (1000.0);
+    me->monitorMetrics.WCRT = monitorMetrics->WCRT / (1000.0);
 }
 
 void Data_setExceptionFlag(Data *const me, bool value)
@@ -98,19 +98,19 @@ int Data_getColumnName(const int columnNumber, char *const name)
         strcpy(name, "cycleCount");
     break;
     case ColumnName_lastStartExecutionTime:
-        strcpy(name, "lastStartExecutionTime (us)");
+        strcpy(name, "lastStartRunTime (us)");
     break;
     case ColumnName_lastStopExecutionTime:
-        strcpy(name, "lastStopExecutionTime (us)");
+        strcpy(name, "lastStopRunTime (us)");
     break;
     case ColumnName_lastET:
-        strcpy(name, "lastET (us)");
+        strcpy(name, "lastRT (us)");
     break;
     case ColumnName_minET:
-        strcpy(name, "minET (us)");
+        strcpy(name, "minRT (us)");
     break;
     case ColumnName_WCET:
-        strcpy(name, "WCET (us)");
+        strcpy(name, "WCRT (us)");
     break;
     // Others
     case ColumnName_isException:
@@ -168,19 +168,19 @@ int64_t Data_getColumnValue(const Data *const me, const int columnNumber)
         return (int64_t) me->monitorMetrics.cycleCount;
     break;
     case ColumnName_lastStartExecutionTime:
-        return (int64_t) me->monitorMetrics.lastStartExecutionTime;
+        return (int64_t) me->monitorMetrics.lastStartRunTime;
     break;
     case ColumnName_lastStopExecutionTime:
-        return (int64_t) me->monitorMetrics.lastStopExecutionTime;
+        return (int64_t) me->monitorMetrics.lastStopRunTime;
     break;
     case ColumnName_lastET:
-        return (int64_t) me->monitorMetrics.lastET;
+        return (int64_t) me->monitorMetrics.lastRT;
     break;
     case ColumnName_minET:
-        return (int64_t) me->monitorMetrics.minET;
+        return (int64_t) me->monitorMetrics.minRT;
     break;
     case ColumnName_WCET:
-        return (int64_t) me->monitorMetrics.WCET;
+        return (int64_t) me->monitorMetrics.WCRT;
     break;
     // Others
     case ColumnName_isException:

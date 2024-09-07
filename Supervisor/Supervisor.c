@@ -219,7 +219,7 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
 
         // 1º Mostra tarefas do tipo deadline
         mvprintw(currentLine++, 0, "SCHED_DEADLINE TASKS:");
-        mvprintw(currentLine++, 0, "PID      PRI    EXECTIME(ms)    WCET(ms)    Latency(us)   minLat(us)  maxLat(us)  dlLosts  rtOverrun  depleted   RUNTIME(ms)    DEADLINE(ms)    PERIOD(ms)    RUN%%    PROC%%");
+        mvprintw(currentLine++, 0, "PID      PRI    RESPONSE_TIME(ms)    WCRT(ms)    Latency(us)   minLat(us)  maxLat(us)  dlLosts  rtOverrun  depleted   RUNTIME(ms)    DEADLINE(ms)    PERIOD(ms)    RUN%%    PROC%%");
 
         pthread_mutex_lock(&me->isTaskBeingTraced_mutex);
         for (ssize_t i = 0; i < MAX_TRACED_TASKS; i++) {
@@ -236,11 +236,11 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
                 }
 
                 // Printa dados das tarefas
-                mvprintw(currentLine++, 0, "%-8d %-6s %-15.3f %-11.3f %-13.1f %-11.1f %-11.1f %-8d %-10d %-10d %-14.3f %-15.3f %-13.3f %-8.1f %-3.1f",
+                mvprintw(currentLine++, 0, "%-8d %-6s %-20.3f %-11.3f %-13.1f %-11.1f %-11.1f %-8d %-10d %-10d %-14.3f %-15.3f %-13.3f %-8.1f %-3.1f",
                     me->monitor[i].pid,
                     "rt",
-                    (float) (me->monitor[i].metrics.lastET / (1000 * 1000.0)),
-                    (float) (me->monitor[i].metrics.WCET / (1000 * 1000.0)),
+                    (float) (me->monitor[i].metrics.lastRT / (1000 * 1000.0)),
+                    (float) (me->monitor[i].metrics.WCRT / (1000 * 1000.0)),
                     (float) (me->monitor[i].metrics.lastLatency / (1000.0)),
                     (float) (me->monitor[i].metrics.minLatency / (1000.0)),
                     (float) (me->monitor[i].metrics.maxLatency / (1000.0)),
@@ -250,8 +250,8 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
                     (float) (runtime / (1000 * 1000.0)),
                     (float) (deadline / (1000 * 1000.0)),
                     (float) (period / (1000 * 1000.0)),
-                    (float) (me->monitor[i].metrics.WCET * 100.0 / runtime),
-                    (float) (me->monitor[i].metrics.WCET * 100.0 / runtime) * ( (float) runtime / (float) period)
+                    (float) (me->monitor[i].metrics.WCRT * 100.0 / runtime),
+                    (float) (me->monitor[i].metrics.WCRT * 100.0 / runtime) * ( (float) runtime / (float) period)
                     );
             }
         }
@@ -263,7 +263,7 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
         mvprintw(currentLine++, 0, "SCHED_FIFO TASKS:");
 
         // Imprimir cabeçalho
-        mvprintw(currentLine++, 0, "PID      PRI    EXECTIME(ms)    MIN_ET(ms)  WCET(ms)");
+        mvprintw(currentLine++, 0, "PID      PRI    RESPONSE_TIME(ms)    MIN_RT(ms)  WCRT(ms)");
 
         pthread_mutex_lock(&me->isTaskBeingTraced_mutex);
         for (ssize_t i = 0; i < MAX_TRACED_TASKS; i++) {
@@ -274,12 +274,12 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
                 }
 
                 // Printa dados das tarefas
-                mvprintw(currentLine++, 0, "%-8d %-6d %-15.3f %-11.3f %-13.3f",
+                mvprintw(currentLine++, 0, "%-8d %-6d %-20.3f %-11.3f %-13.3f",
                     me->monitor[i].pid,
                     -1 - PID_getPriority(me->monitor[i].pid),
-                    (float) (me->monitor[i].metrics.lastET / (1000 * 1000.0)),
-                    (float) (me->monitor[i].metrics.minET / (1000 * 1000.0)),
-                    (float) (me->monitor[i].metrics.WCET / (1000 * 1000.0))
+                    (float) (me->monitor[i].metrics.lastRT / (1000 * 1000.0)),
+                    (float) (me->monitor[i].metrics.minRT / (1000 * 1000.0)),
+                    (float) (me->monitor[i].metrics.WCRT / (1000 * 1000.0))
                     );
             }
         }
@@ -291,7 +291,7 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
         mvprintw(currentLine++, 0, "Other policys:");
 
         // Imprimir cabeçalho
-        mvprintw(currentLine++, 0, "PID      SCHEDTYPE       PRI    EXECTIME(ms)    MIN_ET(ms)  WCET(ms)");
+        mvprintw(currentLine++, 0, "PID      SCHEDTYPE       PRI    RESPONSE_TIME(ms)    MIN_RT(ms)  WCRT(ms)");
 
         pthread_mutex_lock(&me->isTaskBeingTraced_mutex);
         for (ssize_t i = 0; i < MAX_TRACED_TASKS; i++) {
@@ -306,13 +306,13 @@ static void *Supervisor_interfaceUpdateTask(void *arg)
                 }
 
                 // Printa dados das tarefas
-                mvprintw(currentLine++, 0, "%-8d %-15s %-6d %-15.3f %-11.3f %-13.3f",
+                mvprintw(currentLine++, 0, "%-8d %-15s %-6d %-20.3f %-11.3f %-13.3f",
                     me->monitor[i].pid,
                     schedulerPolicy,
                     PID_getPriority(me->monitor[i].pid),
-                    (float) (me->monitor[i].metrics.lastET / (1000 * 1000.0)),
-                    (float) (me->monitor[i].metrics.minET / (1000 * 1000.0)),
-                    (float) (me->monitor[i].metrics.WCET / (1000 * 1000.0))
+                    (float) (me->monitor[i].metrics.lastRT / (1000 * 1000.0)),
+                    (float) (me->monitor[i].metrics.minRT / (1000 * 1000.0)),
+                    (float) (me->monitor[i].metrics.WCRT / (1000 * 1000.0))
                     );
             }
         }

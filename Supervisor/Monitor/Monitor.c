@@ -59,17 +59,17 @@ void *Monitor_task(void *arg)
         switch (me->telegram.code)
         {
         case TelegramCode_startAndStopTime:
-            me->metrics.lastStartExecutionTime = me->telegram.t1;
-            me->metrics.lastStopExecutionTime = me->telegram.t2;
+            me->metrics.lastStartRunTime = me->telegram.t1;
+            me->metrics.lastStopRunTime = me->telegram.t2;
 
             // Calculate the execution time
-            me->metrics.lastET = me->metrics.lastStopExecutionTime - me->metrics.lastStartExecutionTime;
+            me->metrics.lastRT = me->metrics.lastStopRunTime - me->metrics.lastStartRunTime;
 
             // Calculate the maximum and minimum execution time values
-            if (me->metrics.lastET > me->metrics.WCET) {
-                me->metrics.WCET = me->metrics.lastET;
-            } else if (me->metrics.lastET < me->metrics.minET) {
-                me->metrics.minET = me->metrics.lastET;
+            if (me->metrics.lastRT > me->metrics.WCRT) {
+                me->metrics.WCRT = me->metrics.lastRT;
+            } else if (me->metrics.lastRT < me->metrics.minRT) {
+                me->metrics.minRT = me->metrics.lastRT;
             }
 
             do {
@@ -94,16 +94,16 @@ void *Monitor_task(void *arg)
                         This might work we cause I also have a autoadjust, that will stay tuning this value forever.
                     */
                     if (me->metrics.lastCyclicTaskReadyTime == 0) {
-                        me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartExecutionTime;
+                        me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartRunTime;
                     }
 
                     // Autoajust the ready tick in case the first tick was not 100% correct
-                    if (me->metrics.lastStartExecutionTime < me->metrics.lastCyclicTaskReadyTime) {
-                        me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartExecutionTime;
+                    if (me->metrics.lastStartRunTime < me->metrics.lastCyclicTaskReadyTime) {
+                        me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartRunTime;
                     }
 
                     // Calculate latency
-                    me->metrics.lastLatency = (int64_t) me->metrics.lastStartExecutionTime - me->metrics.lastCyclicTaskReadyTime;
+                    me->metrics.lastLatency = (int64_t) me->metrics.lastStartRunTime - me->metrics.lastCyclicTaskReadyTime;
 
                     if (me->metrics.lastLatency > me->metrics.maxLatency) {
                         me->metrics.maxLatency = me->metrics.lastLatency;
@@ -112,28 +112,28 @@ void *Monitor_task(void *arg)
                     }
 
                     // Check for deadline lost
-                    if ((me->metrics.lastStopExecutionTime - me->metrics.lastCyclicTaskReadyTime) > deadline) {
+                    if ((me->metrics.lastStopRunTime - me->metrics.lastCyclicTaskReadyTime) > deadline) {
                         exceptionDetected = true;
                         me->metrics.deadlineLostCount++;
                     }
-                    // if (me->metrics.lastET + me->metrics.lastLatency > deadline) {
+                    // if (me->metrics.lastRT + me->metrics.lastLatency > deadline) {
                     //     me->metrics.deadlineLostCount++;
                     // }
 
                     // Check for task runtime overruns
-                    if (me->metrics.lastET > runtime) {
+                    if (me->metrics.lastRT > runtime) {
                         exceptionDetected = true;
                         me->metrics.runtimeOverrunCount++;
 
                         // Check for task "throttled" or "depleted" in case of overruns
-                        if (me->metrics.lastET > period) {
+                        if (me->metrics.lastRT > period) {
                             me->metrics.taskDepletedCount++;
                         }
                     }
                     
                     // Update next tick where the task will be ready
                     // Here I have a while cause there could have happend some runtime overflows
-                    while(me->metrics.lastCyclicTaskReadyTime < me->metrics.lastStopExecutionTime) {
+                    while(me->metrics.lastCyclicTaskReadyTime < me->metrics.lastStopRunTime) {
                         me->metrics.lastCyclicTaskReadyTime += period;
                         me->metrics.cycleCount++;
                     }
@@ -164,7 +164,7 @@ void *Monitor_task(void *arg)
         // printf("Monitor %d: Telegram received successfully: \n", me->pid);
         // printf("       pid:      %d\n", me->telegram[0].pid);
         // printf("       code:     %d\n", me->telegram[0].code);
-        // printf("       time(ns): %ld\n", me->lastStartExecutionTime);
+        // printf("       time(ns): %ld\n", me->lastStartRunTime);
     }
 
     pthread_exit(NULL);

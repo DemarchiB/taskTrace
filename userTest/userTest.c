@@ -6,7 +6,7 @@
 #include <unistd.h> // getpid
 
 #define NUM_DEADLINE_THREADS 3
-#define NUM_FIFO_THREADS 0
+#define NUM_FIFO_THREADS 1
 #define NUM_THREADS NUM_DEADLINE_THREADS + NUM_FIFO_THREADS
 
 void *user_deadline_task(void *arg)
