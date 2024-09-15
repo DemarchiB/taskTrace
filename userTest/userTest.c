@@ -6,7 +6,7 @@
 #include <unistd.h> // getpid
 
 #define NUM_DEADLINE_THREADS 3
-#define NUM_FIFO_THREADS 1
+#define NUM_FIFO_THREADS 0
 #define NUM_THREADS NUM_DEADLINE_THREADS + NUM_FIFO_THREADS
 
 void *user_deadline_task(void *arg)
@@ -27,11 +27,9 @@ void *user_deadline_task(void *arg)
         return NULL;
     }
 
-    uint64_t runtimeInNs = 5 * 1000 * 1000;   // reserved runtime
-    uint64_t deadlineInNs = 5 * 1000 * 1000;  // deadline
-    uint64_t periodInNs = 15 * 1000 * 1000;   // period
-
-    // const uint64_t workTime = (uint64_t) pid * 100;
+    const uint64_t runtimeInNs = 3.500 * 1000 * 1000;   // reserved runtime
+    const uint64_t deadlineInNs = 5 * 1000 * 1000;  // deadline
+    const uint64_t periodInNs = 15 * 1000 * 1000;   // period
     const long int workTimeInNs = (long int) 3 * 1000 * 1000;
     
     if (PID_setDeadline(pid, runtimeInNs, deadlineInNs, periodInNs)) {

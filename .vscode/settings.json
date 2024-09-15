@@ -19,6 +19,10 @@
         "monitormetrics.h": "c",
         "tasktrace.h": "c",
         "queue.h": "c",
-        "cstdlib": "c"
+        "cstdlib": "c",
+        "terminalinterface.h": "c",
+        "monitor.h": "c",
+        "userinputs.h": "c",
+        "stdlib.h": "c"
     }
 }
