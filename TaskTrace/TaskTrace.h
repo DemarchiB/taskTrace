@@ -1,15 +1,15 @@
 #ifndef __TASK_TRACE_H__
 #define __TASK_TRACE_H__
 
-#include "../Common/SharedMem/SharedMem.h"
+#include "Gateway/Gateway.h"
 
 typedef struct {
     int isInitiallized;
     int isRecording;
     pid_t pid;
-    SharedMem SharedMem;
     Telegram telegram;  // Used as txBuffer.
 
+    Gateway gateway;
     struct timespec tmpTime;    // tmp value, not in stack to avoid page fault
 } TaskTrace;
 

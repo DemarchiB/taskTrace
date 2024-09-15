@@ -15,6 +15,7 @@ static inline int TaskTrace_readTimestamp(struct timespec *timestamp)
     return 0;
 }
 
+// Must be called before changing the task to deadline.
 int TaskTrace_init(TaskTrace *const me)
 {
     // config stack em heap to stay always allocated and avoid page faults during operation
@@ -24,7 +25,7 @@ int TaskTrace_init(TaskTrace *const me)
 
     me->pid = PID_get();
 
-    if (SharedMem_userInit(&me->SharedMem, me->pid)) {
+    if (Gateway_init(&me->gateway, me->pid)) {
         return -1;
     }
 
@@ -101,9 +102,7 @@ int TaskTrace_traceExecutionStop(TaskTrace *const me)
     
     me->telegram.t2 = (me->tmpTime.tv_sec * 1000 * 1000 * 1000) + (me->tmpTime.tv_nsec);
 
-    ssize_t ret = SharedMem_userWrite(&me->SharedMem, &me->telegram);
-
-    if (ret != sizeof(Telegram)) {
+    if (Gateway_write(&me->gateway, &me->telegram)) {
         return -3;
     }
 

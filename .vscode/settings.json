@@ -16,6 +16,9 @@
         "list.h": "c",
         "log.h": "c",
         "stdbool.h": "c",
-        "monitormetrics.h": "c"
+        "monitormetrics.h": "c",
+        "tasktrace.h": "c",
+        "queue.h": "c",
+        "cstdlib": "c"
     }
 }
