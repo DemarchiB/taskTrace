@@ -7,6 +7,7 @@
 
 typedef struct {
     uint64_t lastCyclicTaskReadyTime;   // Use to save the tick when the cyclic (deadline) task will be ready to run again
+    uint64_t totalAltoAdjust;
     int64_t maxLatency;    // The max amount of time taken for the cyclic task to run after being in the ready state
     int64_t minLatency;    // The min amount of time taken for the cyclic task to run after being in the ready state
     int64_t lastLatency;   // The last amount of time taken for the cyclic task to run after being in the ready state

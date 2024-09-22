@@ -89,8 +89,7 @@ void *Monitor_task(void *arg)
                     bool exceptionDetected = false;
 
                     /*
-                        Calculate latency if user provided the first trace tick
-                        If user didn't call the trace for DeadlineTaskStartPoint, then I try to estimate using the trace point of the start exect time.
+                        I try to estimate using the trace point of the start exect time
                         This might work we cause I also have a autoadjust, that will stay tuning this value forever.
                     */
                     if (me->metrics.lastCyclicTaskReadyTime == 0) {
@@ -99,6 +98,7 @@ void *Monitor_task(void *arg)
 
                     // Autoajust the ready tick in case the first tick was not 100% correct
                     if (me->metrics.lastStartRunTime < me->metrics.lastCyclicTaskReadyTime) {
+                        me->metrics.totalAltoAdjust += me->metrics.lastCyclicTaskReadyTime - me->metrics.lastStartRunTime;
                         me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartRunTime;
                     }
 
