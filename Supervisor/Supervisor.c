@@ -1,4 +1,5 @@
 #include "Supervisor.h"
+#include "ReleaseJitterCompensation/ReleaseJitterCompensation.h"
 #include "../Common/Process/Process.h"
 
 #include <stdio.h>
@@ -44,6 +45,11 @@ int Supervisor_init(Supervisor *const me, const UserInputs *const userInputs)
     if (pthread_create(&me->checkTask_id, NULL, Supervisor_checkForNewProcessesThread, me) != 0) {
         perror("Supervisor: Error creating task that check for new processes");
         return -4;
+    }
+
+    printf("Supervisor: Creating task for compensating the relase jitter\n");
+    if (pthread_create(&me->releaseJitterCompensationTask_id, NULL, ReleaseJitterCompensation_task, me) != 0) {
+        perror("Supervisor: Error creating ReleaseJitterCompensation_task, for period error compensation");
     }
 
     return 0;
@@ -169,13 +175,24 @@ static void *Supervisor_checkForNewProcessesThread(void *arg)
         me->monitor[instanceNumber].pid = pid;
         me->monitor[instanceNumber].enableLogging = me->userInputs.enableLogging;
 
-        //printf("Supervisor: Creating a thread to monitor the user process %d\n", pid);
-        if (pthread_create(&me->monitor[instanceNumber].id, 
-                NULL, 
-                Monitor_task, 
-                &me->monitor[instanceNumber]) != 0) {
-            perror("Supervisor: Error creating monitoring thread");
-            printf("Supervisor: PID %d will not be supervised\n", pid);
+        if (pid != ReleaseJitterCompensation_getTaskPID()) {
+            printf("Supervisor: Creating a thread to monitor the user process %d\n", pid);
+            if (pthread_create(&me->monitor[instanceNumber].id, 
+                    NULL, 
+                    Monitor_task, 
+                    &me->monitor[instanceNumber]) != 0) {
+                perror("Supervisor: Error creating monitoring thread");
+                printf("Supervisor: PID %d will not be supervised\n", pid);
+            }
+        } else {
+            printf("Supervisor: Creating ReleaseJitterCompensation_monitorTask thread (pid = %d)\n", pid);
+            if (pthread_create(&me->monitor[instanceNumber].id, 
+                    NULL, 
+                    ReleaseJitterCompensation_monitorTask, 
+                    &me->monitor[instanceNumber]) != 0) {
+                perror("Supervisor: Error creating ReleaseJitterCompensation_monitorTask thread");
+                printf("Supervisor: Release jitter will not be compensated\n");
+            }
         }
     }
 

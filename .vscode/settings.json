@@ -23,6 +23,9 @@
         "terminalinterface.h": "c",
         "monitor.h": "c",
         "userinputs.h": "c",
-        "stdlib.h": "c"
-    }
+        "stdlib.h": "c",
+        "unistd.h": "c",
+        "releasejittercompensation.h": "c"
+    },
+    "makefile.configureOnOpen": false
 }

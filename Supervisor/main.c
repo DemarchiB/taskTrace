@@ -23,9 +23,9 @@ int main(int argc, char *argv[])
     }
 
     printf("Main: Starting terminal interface\n");
-    if (TerminalInterface_start(&terminalInterface, &supervisor)) {
-        printf("Error starting terminal interface\n");
-    }
+    // if (TerminalInterface_start(&terminalInterface, &supervisor)) {
+    //     printf("Error starting terminal interface\n");
+    // }
 
     pthread_join(supervisor.checkTask_id, NULL);
 

@@ -16,6 +16,7 @@ typedef struct {
 
     pthread_t checkTask_id;
     pthread_t cleanUpTask_id;
+    pthread_t releaseJitterCompensationTask_id;
     MonitorThread monitor[MAX_TRACED_TASKS];
 } Supervisor;
 
