@@ -73,75 +73,92 @@ void *Monitor_task(void *arg)
             }
 
             do {
-                if (me->policy == SCHED_DEADLINE) {
-                    // Read task deadline parameters
-                    uint64_t runtime, period, deadline;
-                    if (PID_getDeadlinePropeties(me->pid, &runtime, &deadline, &period) != 0) {
-                        me->policy = PID_getSchedulerPolicy(me->pid, NULL);
-                        if (me->policy != SCHED_DEADLINE) {
-                            printf("Monitor %d: Error, not able to read deadline properties cause user changed the policy to %d\n", me->pid, me->policy);
-                        } else {
-                            printf("Monitor %d: Error, not able to read deadline properties\n", me->pid);
-                        }
-                        break;
+                if (me->policy != SCHED_DEADLINE) {
+                    break;
+                }
+
+                // Read task deadline parameters
+                uint64_t runtime, period, deadline;
+                if (PID_getDeadlinePropeties(me->pid, &runtime, &deadline, &period) != 0) {
+                    me->policy = PID_getSchedulerPolicy(me->pid, NULL);
+                    if (me->policy != SCHED_DEADLINE) {
+                        printf("Monitor %d: Error, not able to read deadline properties cause user changed the policy to %d\n", me->pid, me->policy);
+                    } else {
+                        printf("Monitor %d: Error, not able to read deadline properties\n", me->pid);
                     }
+                    break;
+                }
 
-                    bool exceptionDetected = false;
+                bool deadlineLostDetected = false;
+                bool runtimeOverrunDetected = false;
 
-                    /*
-                        I try to estimate using the trace point of the start exect time
-                        This might work we cause I also have a autoadjust, that will stay tuning this value forever.
-                    */
-                    if (me->metrics.lastCyclicTaskReadyTime == 0) {
-                        me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartRunTime;
+                /*
+                    I try to estimate using the trace point of the start exect time
+                    This might work we cause I also have a autoadjust, that will stay tuning this value forever.
+                */
+                if (me->metrics.lastCyclicTaskReadyTime == 0) {
+                    me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartRunTime;
+                }
+
+                // Autoajust the ready tick in case the first tick was not 100% correct
+                if (me->metrics.lastStartRunTime < me->metrics.lastCyclicTaskReadyTime) {
+                    me->metrics.totalAltoAdjust -= me->metrics.lastCyclicTaskReadyTime - me->metrics.lastStartRunTime;
+                    me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartRunTime;
+                }
+
+                // Calculate latency
+                me->metrics.lastLatency = (int64_t) me->metrics.lastStartRunTime - me->metrics.lastCyclicTaskReadyTime;
+
+                if (me->metrics.lastLatency > me->metrics.maxLatency) {
+                    me->metrics.maxLatency = me->metrics.lastLatency;
+                } else if (me->metrics.lastLatency < me->metrics.minLatency) {
+                    me->metrics.minLatency = me->metrics.lastLatency;
+                }
+
+                // Check for deadline lost
+                if ((me->metrics.lastStopRunTime - me->metrics.lastCyclicTaskReadyTime) > deadline) {
+                    deadlineLostDetected = true;
+                    me->metrics.deadlineLostCount++;
+                }
+                // if (me->metrics.lastRT + me->metrics.lastLatency > deadline) {
+                //     me->metrics.deadlineLostCount++;
+                // }
+
+                // Check for task runtime overruns
+                if (me->metrics.lastRT > runtime) {
+                    runtimeOverrunDetected = true;
+                    me->metrics.runtimeOverrunCount++;
+
+                    // Check for task "throttled" or "depleted" in case of overruns
+                    if (me->metrics.lastRT > period) {
+                        me->metrics.taskDepletedCount++;
                     }
+                }
+                
+                // Update next tick where the task will be ready
+                // Here I have a while cause there could have happend some runtime overflows
+                while(me->metrics.lastCyclicTaskReadyTime < me->metrics.lastStopRunTime) {
+                    me->metrics.lastCyclicTaskReadyTime += period;
+                    me->metrics.cycleCount++;
+                }
 
-                    // Autoajust the ready tick in case the first tick was not 100% correct
-                    if (me->metrics.lastStartRunTime < me->metrics.lastCyclicTaskReadyTime) {
-                        me->metrics.totalAltoAdjust += me->metrics.lastCyclicTaskReadyTime - me->metrics.lastStartRunTime;
-                        me->metrics.lastCyclicTaskReadyTime = me->metrics.lastStartRunTime;
-                    }
+                if (me->enableLogging) {
+                    Log_addNewPoint(&me->log, &me->telegram, &me->metrics, deadlineLostDetected | runtimeOverrunDetected);
+                    Log_generateIfNeeded(&me->log);
+                }
 
-                    // Calculate latency
-                    me->metrics.lastLatency = (int64_t) me->metrics.lastStartRunTime - me->metrics.lastCyclicTaskReadyTime;
+                // When a deadline lost ocurr there may be a lot of causes, but, there is a behavior
+                // from the scheduler that the real period is ALWAYS a little bit higher than the real period
+                // This inserts an error that WILL, for sure, lead to deadline misses.
+                // In this case we thy to adjust the estimated period to avoid indications of deadline losses forever.
+                if (deadlineLostDetected == false) {
+                    break;
+                }
 
-                    if (me->metrics.lastLatency > me->metrics.maxLatency) {
-                        me->metrics.maxLatency = me->metrics.lastLatency;
-                    } else if (me->metrics.lastLatency < me->metrics.minLatency) {
-                        me->metrics.minLatency = me->metrics.lastLatency;
-                    }
-
-                    // Check for deadline lost
-                    if ((me->metrics.lastStopRunTime - me->metrics.lastCyclicTaskReadyTime) > deadline) {
-                        exceptionDetected = true;
-                        me->metrics.deadlineLostCount++;
-                    }
-                    // if (me->metrics.lastRT + me->metrics.lastLatency > deadline) {
-                    //     me->metrics.deadlineLostCount++;
-                    // }
-
-                    // Check for task runtime overruns
-                    if (me->metrics.lastRT > runtime) {
-                        exceptionDetected = true;
-                        me->metrics.runtimeOverrunCount++;
-
-                        // Check for task "throttled" or "depleted" in case of overruns
-                        if (me->metrics.lastRT > period) {
-                            me->metrics.taskDepletedCount++;
-                        }
-                    }
-                    
-                    // Update next tick where the task will be ready
-                    // Here I have a while cause there could have happend some runtime overflows
-                    while(me->metrics.lastCyclicTaskReadyTime < me->metrics.lastStopRunTime) {
-                        me->metrics.lastCyclicTaskReadyTime += period;
-                        me->metrics.cycleCount++;
-                    }
-
-                    if (me->enableLogging) {
-                        Log_addNewPoint(&me->log, &me->telegram, &me->metrics, exceptionDetected);
-                        Log_generateIfNeeded(&me->log);
-                    }
+                // I'll adjust only if there is no overun, meaning that its not a task problem, but probably the system
+                if (runtimeOverrunDetected == false) {
+                    me->metrics.lastCyclicTaskReadyTime += me->metrics.lastLatency;
+                    me->metrics.totalAltoAdjust += me->metrics.lastLatency;
                 }
             } while(0);
 

@@ -5,7 +5,7 @@
 #include <pthread.h>
 #include <unistd.h> // getpid
 
-#define NUM_DEADLINE_THREADS 3
+#define NUM_DEADLINE_THREADS 5
 #define NUM_FIFO_THREADS 0
 #define NUM_THREADS NUM_DEADLINE_THREADS + NUM_FIFO_THREADS
 
@@ -27,10 +27,10 @@ void *user_deadline_task(void *arg)
         return NULL;
     }
 
-    const uint64_t runtimeInNs = 3.500 * 1000 * 1000;   // reserved runtime
-    const uint64_t deadlineInNs = 5 * 1000 * 1000;  // deadline
-    const uint64_t periodInNs = 15 * 1000 * 1000;   // period
-    const long int workTimeInNs = (long int) 3 * 1000 * 1000;
+    const uint64_t runtimeInNs = 1.1 * 1000 * 1000;   // reserved runtime
+    const uint64_t deadlineInNs = 1.25 * 1000 * 1000;  // deadline
+    const uint64_t periodInNs = 1.25 * 1000 * 1000;   // period
+    const long int workTimeInNs = (long int) 1 * 1000 * 1000;
     
     if (PID_setDeadline(pid, runtimeInNs, deadlineInNs, periodInNs)) {
         printf("UserTask %d: Error changing scheduler to deadline: ", pid);
