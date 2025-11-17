@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <errno.h>
 
 static void *gateway_task(void *arg);
 
@@ -42,7 +43,13 @@ int Gateway_update(Gateway *const me)
     ssize_t ret = SharedMem_userWrite(&me->sharedMem, &me->telegram);
 
     if (ret != sizeof(Telegram)) {
-        return -2;
+        if (errno != EAGAIN) {
+            return -2;
+        }
+
+        // if here, the shared mem (FIFO) is full and we should remove the oldest data to
+        // open space for the new data
+        // TODO
     }
 
     return 0;
@@ -63,8 +70,11 @@ static void *gateway_task(void *arg)
     printf("Gateway: Created new gateway for task %d\n", me->sharedMem.pid);
 
     while(1) {
-        if (Gateway_update(me)) {
-            printf("Error reading from gateway\n");
+        int ret = Gateway_update(me);
+
+        if (ret) {
+            printf("Gateway_update error %d\n", ret);
+            perror("");
         }
     }
 
