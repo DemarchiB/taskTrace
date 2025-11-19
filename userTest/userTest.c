@@ -33,7 +33,7 @@ typedef struct {
     bool useNanosleep;
 } TaskArg;
 
-const uint64_t defaultRuntimeInNs = 1.6 * 1000 * 1000;   // reserved runtime
+const uint64_t defaultRuntimeInNs = 2 * 1000 * 1000;   // reserved runtime
 const uint64_t defaultDeadlineInNs = 4 * 1000 * 1000;  // deadline
 const uint64_t defaultPeriodInNs = 5 * 1000 * 1000;   // period
 const long int defaultWorkTimeInNs = (long int) 1.5 * 1000 * 1000;
@@ -200,35 +200,40 @@ int main() {
 
 #if (USE_BENCHMARK_TASKS == 1)
     TaskArg benchmarkTask[NUM_BENCHMARK_TASKS] = {0};
+    // TArefa "bonitinha"
     benchmarkTask[0].taskNumber = taskCount++;
-    benchmarkTask[0].runtimeInNs = 2 * 1000 * 1000;
-    benchmarkTask[0].deadlineInNs = 5 * 1000 * 1000;
-    benchmarkTask[0].periodInNs = 5 * 1000 * 1000;
-    benchmarkTask[0].workTimeInNs = 1 * 1000 * 1000;
+    benchmarkTask[0].runtimeInNs = defaultPeriodInNs * 0.5;
+    benchmarkTask[0].deadlineInNs = defaultPeriodInNs;
+    benchmarkTask[0].periodInNs = defaultPeriodInNs;
+    benchmarkTask[0].workTimeInNs = defaultPeriodInNs * 0.25;
 
+    // Tarefa com estouro de runtime todo ciclo
     benchmarkTask[1].taskNumber = taskCount++;
-    benchmarkTask[1].runtimeInNs = 2 * 1000 * 1000;
-    benchmarkTask[1].deadlineInNs = 5 * 1000 * 1000;
-    benchmarkTask[1].periodInNs = 5 * 1000 * 1000;
-    benchmarkTask[1].workTimeInNs = 2 * 1000 * 1000;
+    benchmarkTask[1].runtimeInNs = defaultPeriodInNs * 0.25;
+    benchmarkTask[1].deadlineInNs = defaultPeriodInNs;
+    benchmarkTask[1].periodInNs = defaultPeriodInNs;
+    benchmarkTask[1].workTimeInNs = defaultPeriodInNs * 0.5;
 
+    // Tarefa no limite do deadline
     benchmarkTask[2].taskNumber = taskCount++;
-    benchmarkTask[2].runtimeInNs = 2 * 1000 * 1000;
-    benchmarkTask[2].deadlineInNs = 2 * 1000 * 1000;
-    benchmarkTask[2].periodInNs = 5 * 1000 * 1000;
-    benchmarkTask[2].workTimeInNs = 1 * 1000 * 1000;
+    benchmarkTask[2].runtimeInNs = defaultPeriodInNs * 0.5;
+    benchmarkTask[2].deadlineInNs = defaultPeriodInNs * 0.5;
+    benchmarkTask[2].periodInNs = defaultPeriodInNs;
+    benchmarkTask[2].workTimeInNs = defaultPeriodInNs * 0.5;
 
+    // Tarefa perdendo deadline sempre
     benchmarkTask[3].taskNumber = taskCount++;
-    benchmarkTask[3].runtimeInNs = 2 * 1000 * 1000;
-    benchmarkTask[3].deadlineInNs = 2 * 1000 * 1000;
-    benchmarkTask[3].periodInNs = 2 * 1000 * 1000;
-    benchmarkTask[3].workTimeInNs = 1 * 1000 * 1000;
+    benchmarkTask[3].runtimeInNs = defaultPeriodInNs * 0.25;
+    benchmarkTask[3].deadlineInNs = defaultPeriodInNs * 0.25;
+    benchmarkTask[3].periodInNs = defaultPeriodInNs;
+    benchmarkTask[3].workTimeInNs = defaultPeriodInNs * 0.3;
 
+    // Tarefa quase quase todo o processador
     benchmarkTask[4].taskNumber = taskCount++;
-    benchmarkTask[4].runtimeInNs = 2 * 1000 * 1000;
-    benchmarkTask[4].deadlineInNs = 2 * 1000 * 1000;
-    benchmarkTask[4].periodInNs = 2 * 1000 * 1000;
-    benchmarkTask[4].workTimeInNs = 1.5 * 1000 * 1000;
+    benchmarkTask[4].runtimeInNs = defaultPeriodInNs;
+    benchmarkTask[4].deadlineInNs = defaultPeriodInNs;
+    benchmarkTask[4].periodInNs = defaultPeriodInNs;
+    benchmarkTask[4].workTimeInNs = defaultPeriodInNs * 0.9;
 
 #endif
 

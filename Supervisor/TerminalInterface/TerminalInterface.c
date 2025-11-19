@@ -77,7 +77,7 @@ static void *TerminalInterface_interfaceUpdateTask(void *arg)
                     (float) (supervisor->monitor[i].metrics.WCRT / (1000 * 1000.0)),
                     (float) (supervisor->monitor[i].metrics.lastLatency / (1000.0)),
                     (float) (supervisor->monitor[i].metrics.maxLatency / (1000.0)),
-                    (float) (supervisor->monitor[i].metrics.totalAltoAdjust / (1000.0)),
+                    (float) ((float)supervisor->monitor[i].metrics.totalAltoAdjust / (1000.0)),
                     (uint32_t) (supervisor->monitor[i].metrics.cycleCount),
                     (uint32_t) (supervisor->monitor[i].metrics.deadlineLostCount),
                     (uint32_t) (supervisor->monitor[i].metrics.runtimeOverrunCount),
