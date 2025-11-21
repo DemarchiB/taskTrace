@@ -2,14 +2,41 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <pthread.h>
 #include <unistd.h> // getpid
 #include <errno.h>
 #include <sys/timerfd.h>
 
-#define NUM_DEADLINE_THREADS 5
+#define USE_BENCHMARK_TASKS 1
+#if (USE_BENCHMARK_TASKS == 1)
+#define NUM_BENCHMARK_TASKS 5
+#else
+#define NUM_BENCHMARK_TASKS 0
+#endif
+#define NUM_DEFAULT_DEADLINE_TASKS 1
 #define NUM_FIFO_THREADS 0
-#define NUM_THREADS NUM_DEADLINE_THREADS + NUM_FIFO_THREADS
+
+#if (USE_BENCHMARK_TASKS == 1)
+#define NUM_THREADS NUM_DEFAULT_DEADLINE_TASKS + NUM_FIFO_THREADS + NUM_BENCHMARK_TASKS
+#else
+#define NUM_THREADS NUM_DEFAULT_DEADLINE_TASKS + NUM_FIFO_THREADS
+#endif
+
+typedef struct {
+    int taskNumber;
+    uint64_t runtimeInNs;   // reserved runtime
+    uint64_t deadlineInNs;  // deadline
+    uint64_t periodInNs;   // period
+    long int workTimeInNs;
+    bool useTimerfd;
+    bool useNanosleep;
+} TaskArg;
+
+const uint64_t defaultRuntimeInNs = 1.6 * 1000 * 1000;   // reserved runtime
+const uint64_t defaultDeadlineInNs = 4 * 1000 * 1000;  // deadline
+const uint64_t defaultPeriodInNs = 5 * 1000 * 1000;   // period
+const long int defaultWorkTimeInNs = (long int) 1.5 * 1000 * 1000;
 
 static inline void add_timespec(struct timespec *t, long ns)
 {
@@ -22,8 +49,7 @@ static inline void add_timespec(struct timespec *t, long ns)
 
 void *user_deadline_task(void *arg)
 {
-    int taskNumber = *(int *)arg;
-    (void) taskNumber;
+    const TaskArg *const taskArg = arg;
     TaskTrace taskTrace;
     pid_t pid = PID_get();
     printf("UserTask: Deadline task created with pid %d\n", pid);
@@ -37,30 +63,25 @@ void *user_deadline_task(void *arg)
         printf("UserTask %d: Start recording returned error\n", pid);
         return NULL;
     }
-
-    const uint64_t runtimeInNs = 3 * 1000 * 1000;   // reserved runtime
-    const uint64_t deadlineInNs = 5 * 1000 * 1000;  // deadline
-    const uint64_t periodInNs = 5 * 1000 * 1000;   // period
-    const long int workTimeInNs = (long int) 1 * 1000 * 1000;
     
-    if (PID_setDeadline(pid, runtimeInNs, deadlineInNs, periodInNs)) {
+    if (PID_setDeadline(pid, taskArg->runtimeInNs, taskArg->deadlineInNs, taskArg->periodInNs)) {
         printf("UserTask %d: Error changing scheduler to deadline\n", pid);
         perror("");
         return NULL;
     }
 
-    struct timespec next_release = {0}; // only used if taskNumber == 0
-    int fd = 0; // only used if taskNumber == 1
+    struct timespec next_release = {0}; // only used if taskArg->useNanosleep
+    int fd = 0; // only used if taskArg->useNanosleep
 
-    if (taskNumber == 0) {
+    if (taskArg->useNanosleep) {
         next_release.tv_sec = 0;
         next_release.tv_nsec = 0;
-    } else if (taskNumber == 1) {
+    } else if (taskArg->useTimerfd) {
         fd = timerfd_create(CLOCK_MONOTONIC, 0);
 
         struct itimerspec its = {
-            .it_interval = {0, periodInNs}, // 500 ms
-            .it_value    = {0, periodInNs}
+            .it_interval = {0, taskArg->periodInNs}, // 500 ms
+            .it_value    = {0, taskArg->periodInNs}
         };
 
         timerfd_settime(fd, 0, &its, NULL);
@@ -76,26 +97,26 @@ void *user_deadline_task(void *arg)
         t_cur.tv_sec = t_cur.tv_sec;
 
         // simulate some load
-        while ((((t_cur.tv_sec * 1000 * 1000 * 1000) + t_cur.tv_nsec) - ((t_ini.tv_sec * 1000 * 1000 * 1000) + t_ini.tv_nsec)) < workTimeInNs) {
+        while ((((t_cur.tv_sec * 1000 * 1000 * 1000) + t_cur.tv_nsec) - ((t_ini.tv_sec * 1000 * 1000 * 1000) + t_ini.tv_nsec)) < taskArg->workTimeInNs) {
             clock_gettime(CLOCK_MONOTONIC, &t_cur);
         }
 
         TaskTrace_traceExecutionStop(&taskTrace);
 
-        if (taskNumber == 0) {
+        if (taskArg->useNanosleep) {
             if ((next_release.tv_sec == 0) && (next_release.tv_nsec == 0)) {
                 next_release.tv_sec = t_ini.tv_sec;
                 next_release.tv_nsec = t_ini.tv_nsec;
             }
             // Calcula próxima liberação do período
-            add_timespec(&next_release, periodInNs);
+            add_timespec(&next_release, taskArg->periodInNs);
 
             // Espera até o instante ABSOLUTO
             if (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_release, NULL)) {
                 int saved = errno;
                 printf("clock_nanosleep %d error %d\n", pid, saved);
             }
-        } else if (taskNumber == 1) {
+        } else if (taskArg->useNanosleep) {
             uint64_t expirations;
             read(fd, &expirations, sizeof(expirations));
         } else {
@@ -162,21 +183,80 @@ int main() {
     int taskNumber[NUM_THREADS];
     int taskCount = 0;
 
+    TaskArg defaultTask[NUM_DEFAULT_DEADLINE_TASKS] = {0};
+
+    for (int i = 0; i < NUM_DEFAULT_DEADLINE_TASKS; i++) {
+        defaultTask[i].taskNumber = taskCount++;
+        defaultTask[i].runtimeInNs = defaultRuntimeInNs;
+        defaultTask[i].deadlineInNs = defaultDeadlineInNs;
+        defaultTask[i].periodInNs = defaultPeriodInNs;
+        defaultTask[i].workTimeInNs = defaultWorkTimeInNs;
+        if (i == 1) {
+            defaultTask[i].useNanosleep = true;
+        } else if (i == 2) {
+            defaultTask[i].useTimerfd = true;
+        }
+    }
+
+#if (USE_BENCHMARK_TASKS == 1)
+    TaskArg benchmarkTask[NUM_BENCHMARK_TASKS] = {0};
+    benchmarkTask[0].taskNumber = taskCount++;
+    benchmarkTask[0].runtimeInNs = 2 * 1000 * 1000;
+    benchmarkTask[0].deadlineInNs = 5 * 1000 * 1000;
+    benchmarkTask[0].periodInNs = 5 * 1000 * 1000;
+    benchmarkTask[0].workTimeInNs = 1 * 1000 * 1000;
+
+    benchmarkTask[1].taskNumber = taskCount++;
+    benchmarkTask[1].runtimeInNs = 2 * 1000 * 1000;
+    benchmarkTask[1].deadlineInNs = 5 * 1000 * 1000;
+    benchmarkTask[1].periodInNs = 5 * 1000 * 1000;
+    benchmarkTask[1].workTimeInNs = 2 * 1000 * 1000;
+
+    benchmarkTask[2].taskNumber = taskCount++;
+    benchmarkTask[2].runtimeInNs = 2 * 1000 * 1000;
+    benchmarkTask[2].deadlineInNs = 2 * 1000 * 1000;
+    benchmarkTask[2].periodInNs = 5 * 1000 * 1000;
+    benchmarkTask[2].workTimeInNs = 1 * 1000 * 1000;
+
+    benchmarkTask[3].taskNumber = taskCount++;
+    benchmarkTask[3].runtimeInNs = 2 * 1000 * 1000;
+    benchmarkTask[3].deadlineInNs = 2 * 1000 * 1000;
+    benchmarkTask[3].periodInNs = 2 * 1000 * 1000;
+    benchmarkTask[3].workTimeInNs = 1 * 1000 * 1000;
+
+    benchmarkTask[4].taskNumber = taskCount++;
+    benchmarkTask[4].runtimeInNs = 2 * 1000 * 1000;
+    benchmarkTask[4].deadlineInNs = 2 * 1000 * 1000;
+    benchmarkTask[4].periodInNs = 2 * 1000 * 1000;
+    benchmarkTask[4].workTimeInNs = 1.5 * 1000 * 1000;
+
+#endif
+
     for (int i = 0; i < NUM_THREADS; i++) {
         taskNumber[i] = i;
     }
+    taskCount = 0;
 
     printf("UserTest: Started with PID %d\n", PID_get());
 
     printf("UserTest: Creating threads\n");
 
     // Criação das tasks deadline
-    for (int i = 0; i < NUM_DEADLINE_THREADS; i++, taskCount++) {
-        if (pthread_create(&tasks[taskCount], NULL, user_deadline_task, &taskNumber[taskCount]) != 0) {
+    for (int i = 0; i < NUM_DEFAULT_DEADLINE_TASKS; i++, taskCount++) {
+        if (pthread_create(&tasks[taskCount], NULL, user_deadline_task, &defaultTask[i]) != 0) {
             perror("Erro ao criar a tarefa de usuário");
             exit(EXIT_FAILURE);
         }
     }
+
+#if (USE_BENCHMARK_TASKS == 1)
+    for (int i = 0; i < NUM_BENCHMARK_TASKS; i++, taskCount++) {
+        if (pthread_create(&tasks[taskCount], NULL, user_deadline_task, &benchmarkTask[i]) != 0) {
+            perror("Erro ao criar a tarefa de usuário");
+            exit(EXIT_FAILURE);
+        }
+    }
+#endif
     
     // Criação das tasks fifo
     for (int i = 0; i < NUM_FIFO_THREADS; i++, taskCount++) {
